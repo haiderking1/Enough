@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -36,10 +37,20 @@ type App struct {
 	sessionPickerConfirmDelete string
 	sessionPickerStatus        string
 
-	running  bool
-	agentCh  <-chan core.Event
-	agent    *agent.Agent
-	session  *session.Manager
+	treePickerNodes            []FlatTreeNode
+	treePickerCursor           int
+	treePickerConfirm          int
+	treePickerChoice           int
+	treePickerTarget           string
+
+	running                    bool
+	compacting                 bool
+	compactionLabel            string
+	compactionFrame            int
+	compactionQueuedMessages   []string
+	agentCh                    <-chan core.Event
+	agent                      *agent.Agent
+	session                    *session.Manager
 
 	thinkingLevel opencode.ThinkingLevel
 	hideThinking  bool
@@ -115,6 +126,9 @@ func (a *App) run() error {
 	}
 	a.escFlush = escFlush
 
+	compactionTick := time.NewTicker(80 * time.Millisecond)
+	defer compactionTick.Stop()
+
 	for !a.quit {
 		a.mu.Lock()
 		agentCh := a.agentCh
@@ -138,17 +152,43 @@ func (a *App) run() error {
 				a.running = false
 				a.agentCh = nil
 				a.mu.Unlock()
-				a.requestRender()
 			} else {
 				a.handleAgentEvent(e)
-				a.requestRender()
+				for {
+					select {
+					case e, ok = <-agentCh:
+						if !ok {
+							a.mu.Lock()
+							a.running = false
+							a.agentCh = nil
+							a.mu.Unlock()
+							goto agentEventsDone
+						}
+						a.handleAgentEvent(e)
+					default:
+						goto agentEventsDone
+					}
+				}
 			}
+		agentEventsDone:
+			a.requestRender()
 
 		case <-a.renderCh:
 			a.mu.Lock()
 			lines := a.buildLines()
 			a.mu.Unlock()
 			a.renderer.Render(lines)
+
+		case <-compactionTick.C:
+			a.mu.Lock()
+			compacting := a.compacting
+			if compacting {
+				a.compactionFrame++
+			}
+			a.mu.Unlock()
+			if compacting {
+				a.requestRender()
+			}
 		}
 	}
 
@@ -164,23 +204,59 @@ func (a *App) initSession() error {
 
 	for _, line := range sm.ChatLines() {
 		a.messages = append(a.messages, chatMsg{
-			role:       line.Role,
-			text:       line.Text,
-			thinking:   line.Thinking,
-			toolName:   line.ToolName,
-			toolArgs:   line.ToolArgs,
-			toolResult: line.ToolResult,
-			toolError:  line.ToolError,
+			role:         line.Role,
+			text:         line.Text,
+			thinking:     line.Thinking,
+			toolName:     line.ToolName,
+			toolArgs:     line.ToolArgs,
+			toolResult:   line.ToolResult,
+			toolError:    line.ToolError,
+			tokensBefore: line.TokensBefore,
 		})
 	}
+
+	nComp := 0
+	for _, entry := range sm.GetBranch(sm.LeafID()) {
+		if entry.Type == session.TypeCompaction {
+			nComp++
+		}
+	}
+	if nComp > 0 {
+		a.appendMessage("system", fmt.Sprintf("Session compacted %d times", nComp))
+	}
+
 	return nil
 }
 
 func (a *App) ensureAgent(cfg config.Runtime) *agent.Agent {
 	if a.agent == nil {
 		a.agent = agent.New(cfg, "", a.session)
+		return a.agent
+	}
+	a.agent.UpdateConfig(cfg)
+	if a.session != nil {
+		a.agent.LoadSession(a.session)
 	}
 	return a.agent
+}
+
+func (a *App) reloadChatFromSession() {
+	a.messages = nil
+	if a.session == nil {
+		return
+	}
+	for _, line := range a.session.ChatLines() {
+		a.messages = append(a.messages, chatMsg{
+			role:         line.Role,
+			text:         line.Text,
+			thinking:     line.Thinking,
+			toolName:     line.ToolName,
+			toolArgs:     line.ToolArgs,
+			toolResult:   line.ToolResult,
+			toolError:    line.ToolError,
+			tokensBefore: line.TokensBefore,
+		})
+	}
 }
 
 func (a *App) handleInput(data []byte) {
@@ -230,6 +306,12 @@ func (a *App) handleKey(k parsedKey) bool {
 			return false
 		}
 		if a.handleSessionPickerKey(k) {
+			return false
+		}
+	}
+
+	if !running && mode == modeTreePicker {
+		if a.handleTreePickerKey(k) {
 			return false
 		}
 	}
@@ -304,7 +386,7 @@ func (a *App) handleKey(k parsedKey) bool {
 		}
 	}
 
-	if k.action == keyEnter && !running && a.mode != modeSessionPicker {
+	if k.action == keyEnter && (!running || a.compacting) && a.mode != modeSessionPicker {
 		a.handleSubmit()
 		a.requestRender()
 		return false
@@ -372,6 +454,56 @@ func (a *App) buildLines() []string {
 		lines = append(lines, strings.Split(picker, "\n")...)
 	}
 
+	if a.mode == modeTreePicker {
+		if picker := a.renderTreePicker(w); picker != "" {
+			if len(lines) > 0 {
+				lines = append(lines, "")
+			}
+			lines = append(lines, strings.Split(picker, "\n")...)
+		}
+	}
+
+	var statusLine string
+	if a.session != nil {
+		cfg, err := config.Load()
+		enabled := true
+		if err == nil && cfg.Compaction != nil {
+			enabled = cfg.Compaction.Enabled
+		}
+
+		contextWindow := agent.ModelContextWindow(config.DefaultModel, 0)
+		if runCfg, runErr := config.LoadRuntime(); runErr == nil {
+			contextWindow = agent.ModelContextWindow(runCfg.Model, runCfg.Compaction.ContextWindow)
+		} else if err == nil && cfg.Compaction != nil && cfg.Compaction.ContextWindow > 0 {
+			contextWindow = agent.ModelContextWindow(cfg.Model, cfg.Compaction.ContextWindow)
+		}
+
+		sessionMsgs := a.session.BuildSessionContext().Messages
+		tokens := session.EstimateContextTokens(sessionMsgs).Tokens
+		percent := 0
+		if contextWindow > 0 {
+			percent = (tokens * 100) / contextWindow
+		}
+		statusLine = fmt.Sprintf("  tokens: %d / %d (%d%%)", tokens, contextWindow, percent)
+		if !enabled {
+			statusLine += " · auto-compact off"
+		}
+	}
+
+	if statusLine != "" {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, a.styles.LogDim.Render(statusLine))
+	}
+
+	if loader := a.renderCompactionLoader(); loader != "" {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, loader)
+	}
+
 	composer := a.composerStyle().
 		Width(w - 2).
 		Render(a.renderTaskInput())
@@ -404,7 +536,11 @@ func (a *App) renderTaskInput() string {
 
 	if a.running {
 		if value == "" {
-			return prompt + a.styles.InputCaret.Render("▎") + "  " + a.styles.InputHint.Render("esc interrupt · ctrl+c abort")
+			hint := "esc interrupt · ctrl+c abort"
+			if a.compacting {
+				hint = "compacting... esc cancel · ctrl+c abort"
+			}
+			return prompt + a.styles.InputCaret.Render("▎") + "  " + a.styles.InputHint.Render(hint)
 		}
 		return a.renderTypedLine(prompt, value)
 	}
@@ -513,7 +649,59 @@ func (a *App) handleSubmit() {
 		return
 	}
 
+	if a.compacting {
+		a.compactionQueuedMessages = append(a.compactionQueuedMessages, raw)
+		a.appendMessage("user", raw)
+		a.requestRender()
+		return
+	}
+
 	a.appendMessage("user", raw)
 	a.startAgent(raw)
 	a.requestRender()
+}
+
+func (a *App) renderTreePicker(width int) string {
+	var lines []string
+	if a.treePickerConfirm == 0 {
+		lines = append(lines, a.styles.SlashSelected.Render(" Select branch node to navigate to: "))
+		for i, node := range a.treePickerNodes {
+			marker := "  "
+			if i == a.treePickerCursor {
+				marker = "› "
+			}
+			indentStr := strings.Repeat("  ", node.Indent)
+			text := node.DisplayText
+			if node.IsActive {
+				text += " (current position)"
+			}
+			line := fmt.Sprintf("%s%s%s", marker, indentStr, text)
+			if i == a.treePickerCursor {
+				lines = append(lines, a.styles.SlashSelected.Render(line))
+			} else {
+				lines = append(lines, a.styles.SlashDim.Render(line))
+			}
+		}
+		lines = append(lines, "")
+		lines = append(lines, a.styles.SlashDim.Render("  ↑↓ pick   enter select   esc cancel"))
+	} else if a.treePickerConfirm == 1 {
+		lines = append(lines, a.styles.SlashSelected.Render(" Summarize abandoned branch? "))
+		choices := []string{"No summary", "Summarize", "Summarize with custom prompt"}
+		for i, choice := range choices {
+			marker := "  "
+			if i == a.treePickerChoice {
+				marker = "› "
+			}
+			line := marker + choice
+			if i == a.treePickerChoice {
+				lines = append(lines, a.styles.SlashSelected.Render(line))
+			} else {
+				lines = append(lines, a.styles.SlashDim.Render(line))
+			}
+		}
+		lines = append(lines, "")
+		lines = append(lines, a.styles.SlashDim.Render("  ↑↓ pick   enter confirm   esc back"))
+	}
+	body := strings.Join(lines, "\n")
+	return a.styles.SlashMenu.Width(width - 2).Render(body)
 }

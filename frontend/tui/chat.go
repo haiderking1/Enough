@@ -1,21 +1,23 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 )
 
 type chatMsg struct {
-	role     string // user, assistant, tool, error, system
-	text     string
-	thinking string
-	toolID      string
-	toolName    string
-	toolArgs    string
-	toolResult  string
-	toolError   bool
+	role         string // user, assistant, tool, error, system, compactionSummary, branchSummary
+	text         string
+	thinking     string
+	toolID       string
+	toolName     string
+	toolArgs     string
+	toolResult   string
+	toolError    bool
 	toolPending bool
-	toolAdded   int
-	toolRemoved int
+	toolAdded    int
+	toolRemoved  int
+	tokensBefore int
 }
 
 func wrapText(text string, width int) string {
@@ -69,6 +71,36 @@ func wrapWords(text string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
+func renderCompactionSummary(styles Styles, msg chatMsg, width int, expanded bool) string {
+	label := styles.LogAccent.Render("[compaction]")
+
+	if expanded {
+		header := fmt.Sprintf("**Compacted from %d tokens**\n\n", msg.tokensBefore)
+		content := header + msg.text
+		return label + "\n" + wrapText(content, width)
+	}
+
+	text := fmt.Sprintf("Compacted from %d tokens (ctrl+o to expand)", msg.tokensBefore)
+	return label + " " + styles.LogDim.Render(text)
+}
+
+func renderBranchSummary(styles Styles, msg chatMsg, width int, expanded bool) string {
+	label := styles.LogAccent.Render("[branch]")
+
+	if expanded {
+		header := "**Branch Summary**\n\n"
+		content := header + msg.text
+		return label + "\n" + wrapText(content, width)
+	}
+
+	text := "Branch summary (ctrl+o to expand)"
+	return label + " " + styles.LogDim.Render(text)
+}
+
+// renderChat formats the messages list.
+// Note: Ctrl+O toggles expandTools, which in Enough's scrolling-only chat layout
+// globally expands both tool call outputs and compaction/branch summary details.
+// This is intentional to keep navigation simple and consistent.
 func renderChat(styles Styles, messages []chatMsg, width int, hideThinking, expandTools bool) string {
 	if width <= 0 {
 		width = 80
@@ -104,6 +136,18 @@ func renderChat(styles Styles, messages []chatMsg, width int, hideThinking, expa
 			if block != "" {
 				blocks = append(blocks, block)
 				roles = append(roles, "tool")
+			}
+		case "compactionSummary":
+			block := renderCompactionSummary(styles, msg, contentW, expandTools)
+			if block != "" {
+				blocks = append(blocks, block)
+				roles = append(roles, "compactionSummary")
+			}
+		case "branchSummary":
+			block := renderBranchSummary(styles, msg, contentW, expandTools)
+			if block != "" {
+				blocks = append(blocks, block)
+				roles = append(roles, "branchSummary")
 			}
 		case "error":
 			blocks = append(blocks, styles.AssistError.Render("● "+wrapText(msg.text, contentW-4)))

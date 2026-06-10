@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/enough/enough/backend/auth"
+	"github.com/enough/enough/backend/config"
+	"github.com/enough/enough/backend/core"
 )
 
 func (a *App) handleSlash(input string) {
@@ -34,6 +37,71 @@ func (a *App) handleSlash(input string) {
 		a.openSessionPicker()
 	case "new":
 		a.startNewSession()
+	case "compact":
+		a.startCompact(arg)
+	case "auto-compact":
+		cfg, err := config.Load()
+		if err != nil {
+			a.appendMessage("error", err.Error())
+			return
+		}
+		if cfg.Compaction == nil {
+			cfg.Compaction = &config.CompactionSettings{
+				Enabled:          true,
+				ReserveTokens:    16384,
+				KeepRecentTokens: 20000,
+			}
+		}
+
+		val := strings.ToLower(arg)
+		if val == "on" {
+			cfg.Compaction.Enabled = true
+			a.appendMessage("system", "Auto-compaction enabled")
+		} else if val == "off" {
+			cfg.Compaction.Enabled = false
+			a.appendMessage("system", "Auto-compaction disabled")
+		} else {
+			a.appendMessage("error", "Usage: /auto-compact on|off")
+			return
+		}
+
+		if err := config.Save(cfg); err != nil {
+			a.appendMessage("error", err.Error())
+			return
+		}
+
+		if runCfg, err := config.LoadRuntime(); err == nil {
+			a.mu.Lock()
+			if a.agent != nil {
+				a.agent.UpdateConfig(runCfg)
+			}
+			a.mu.Unlock()
+		}
+		a.requestRender()
+	case "tree":
+		if a.session == nil {
+			a.appendMessage("error", "no active session")
+			return
+		}
+		if a.running {
+			a.appendMessage("error", "wait for the agent to finish")
+			return
+		}
+
+		roots := a.session.GetTree()
+		if len(roots) == 0 {
+			a.appendMessage("system", "No entries in session tree")
+			return
+		}
+
+		a.treePickerNodes = a.buildFlatTreeNodes(roots, 0, a.session.LeafID())
+		a.treePickerCursor = 0
+		a.treePickerConfirm = 0
+		a.treePickerChoice = 0
+		a.treePickerTarget = ""
+		a.mode = modeTreePicker
+		a.editor.SetValue("")
+		a.requestRender()
 	default:
 		a.appendMessage("error", "unknown command: /"+name)
 	}
@@ -66,4 +134,55 @@ func (a *App) cancelConnect() {
 		a.editor.SetValue("")
 		a.appendMessage("system", "connect cancelled")
 	}
+}
+
+func (a *App) startCompact(customInstructions string) {
+	if !auth.Connected() {
+		a.appendMessage("error", "not connected — type / and pick connect")
+		return
+	}
+	if a.session == nil {
+		a.appendMessage("error", "no active session")
+		return
+	}
+	cfg, err := config.LoadRuntime()
+	if err != nil {
+		a.appendMessage("error", err.Error())
+		return
+	}
+
+	cmdLine := "/compact"
+	if strings.TrimSpace(customInstructions) != "" {
+		cmdLine += " " + strings.TrimSpace(customInstructions)
+	}
+	a.appendMessage("user", cmdLine)
+	a.setCompacting(true, "Compacting context...")
+	a.requestRender()
+
+	a.runAgentTask(func(emit func(core.Event)) {
+		a.mu.Lock()
+		ag := a.ensureAgent(cfg)
+		ag.SetEmit(emit)
+		a.mu.Unlock()
+
+		_, _ = ag.Compact(context.Background(), customInstructions)
+	})
+}
+
+func (a *App) runAgentTask(task func(emit func(core.Event))) {
+	a.mu.Lock()
+	a.running = true
+	ch := make(chan core.Event, 64)
+	a.agentCh = ch
+	a.mu.Unlock()
+
+	go func() {
+		defer close(ch)
+		emit := func(e core.Event) {
+			ch <- e
+			a.requestRender()
+		}
+		task(emit)
+	}()
+	a.requestRender()
 }

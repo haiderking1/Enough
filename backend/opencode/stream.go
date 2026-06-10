@@ -17,6 +17,11 @@ type streamChunk struct {
 		FinishReason *string     `json:"finish_reason"`
 	} `json:"choices"`
 	Error *APIError `json:"error"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage,omitempty"`
 }
 
 type streamDelta struct {
@@ -58,6 +63,7 @@ func (c *Client) ChatStream(ctx context.Context, req ChatRequest, cb StreamCallb
 		req.Model = c.model
 	}
 	req.Stream = true
+	req.StreamOptions = &StreamOptions{IncludeUsage: true}
 	req.Messages = RepairToolMessages(NormalizeMessages(req.Messages, req.Model))
 
 	body, err := json.Marshal(req)
@@ -93,6 +99,7 @@ func (c *Client) ChatStream(ctx context.Context, req ChatRequest, cb StreamCallb
 
 	var content strings.Builder
 	var reasoning strings.Builder
+	var lastUsage *Usage
 	toolParts := make(map[int]*ToolCall)
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -117,6 +124,13 @@ func (c *Client) ChatStream(ctx context.Context, req ChatRequest, cb StreamCallb
 		}
 		if chunk.Error != nil && chunk.Error.Message != "" {
 			return Message{}, fmt.Errorf("opencode: %s", chunk.Error.Message)
+		}
+		if chunk.Usage != nil {
+			lastUsage = &Usage{
+				Input:       chunk.Usage.PromptTokens,
+				Output:      chunk.Usage.CompletionTokens,
+				TotalTokens: chunk.Usage.TotalTokens,
+			}
 		}
 		if len(chunk.Choices) == 0 {
 			continue
@@ -159,7 +173,7 @@ func (c *Client) ChatStream(ctx context.Context, req ChatRequest, cb StreamCallb
 		return Message{}, err
 	}
 
-	msg := Message{Role: "assistant"}
+	msg := Message{Role: "assistant", Usage: lastUsage}
 	if content.Len() > 0 {
 		s := content.String()
 		msg.Content = &s
