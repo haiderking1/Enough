@@ -6,8 +6,21 @@ import (
 )
 
 func (a *App) handleInterrupt() {
+	if a.compacting {
+		a.mu.Lock()
+		ag := a.agent
+		a.mu.Unlock()
+		if ag != nil {
+			ag.AbortCompaction()
+		}
+		return
+	}
 	if a.running {
 		a.abortAgent()
+		return
+	}
+	if a.mode == modeTreePicker {
+		a.dismissTreePicker()
 		return
 	}
 	if a.mode == modeSessionPicker {

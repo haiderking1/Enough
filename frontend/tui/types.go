@@ -6,6 +6,7 @@ const (
 	modeTask composerMode = iota
 	modeConnect
 	modeSessionPicker
+	modeTreePicker
 )
 
 const (
@@ -23,4 +24,7 @@ var slashCommands = []slashCommand{
 	{name: "new", desc: "start a fresh session"},
 	{name: "sessions", desc: "list saved sessions for this project"},
 	{name: "resume", desc: "pick a session to resume"},
+	{name: "compact", desc: "manually compact conversation context"},
+	{name: "auto-compact", desc: "toggle auto-compaction (on|off)"},
+	{name: "tree", desc: "navigate to earlier branch point in active session"},
 }

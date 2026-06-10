@@ -2,9 +2,12 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/core"
+	"github.com/enough/enough/backend/session"
 )
 
 func (a *App) startAgent(task string) {
@@ -35,6 +38,70 @@ func (a *App) startAgent(task string) {
 
 func (a *App) handleAgentEvent(e core.Event) {
 	switch e.Kind {
+	case core.EventCompactionStart:
+		label := "Compacting context..."
+		if ev, ok := e.Data.(core.CompactionStartEvent); ok {
+			switch ev.Reason {
+			case "overflow":
+				label = "Context overflow detected, auto-compacting..."
+			case "threshold":
+				label = "Auto-compacting..."
+			}
+		}
+		a.setCompacting(true, label)
+
+	case core.EventCompactionEnd:
+		a.setCompacting(false, "")
+
+		var ev core.CompactionEndEvent
+		if data, ok := e.Data.(core.CompactionEndEvent); ok {
+			ev = data
+		}
+
+		if ev.Aborted {
+			if ev.Reason == "manual" {
+				a.appendMessage("system", "Compaction cancelled")
+			} else {
+				a.appendMessage("system", "Auto-compaction cancelled")
+			}
+		} else if ev.ErrorMessage != "" {
+			a.appendMessage("error", ev.ErrorMessage)
+		} else if result, ok := ev.Result.(*session.CompactionResult); ok && result != nil {
+			after := 0
+			if a.session != nil {
+				after = session.EstimateContextTokens(a.session.BuildSessionContext().Messages).Tokens
+			}
+			a.appendMessage("system", fmt.Sprintf("Compacted from %d → %d tokens", result.TokensBefore, after))
+			a.reloadChatFromSession()
+		} else {
+			a.reloadChatFromSession()
+		}
+
+		if !ev.WillRetry && len(a.compactionQueuedMessages) > 0 {
+			queued := strings.Join(a.compactionQueuedMessages, "\n")
+			a.compactionQueuedMessages = nil
+			a.startAgent(queued)
+		}
+
+	case core.EventBranchSummaryStart:
+		a.setCompacting(true, "Summarizing branch...")
+
+	case core.EventBranchSummaryEnd:
+		a.setCompacting(false, "")
+
+		var ev core.BranchSummaryEndEvent
+		if data, ok := e.Data.(core.BranchSummaryEndEvent); ok {
+			ev = data
+		}
+
+		if ev.Aborted {
+			a.appendMessage("system", "Branch summarization cancelled")
+		} else if ev.ErrorMessage != "" {
+			a.appendMessage("error", ev.ErrorMessage)
+		} else {
+			a.reloadChatFromSession()
+		}
+
 	case core.EventAssistantStart:
 		a.ensureAssistantBubble()
 

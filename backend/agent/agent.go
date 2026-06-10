@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/core"
@@ -29,6 +30,9 @@ type Agent struct {
 	messages []opencode.Message
 	busy     bool
 	cancel   context.CancelFunc
+
+	compactionCancel          context.CancelFunc
+	overflowRecoveryAttempted bool
 }
 
 func New(cfg config.Runtime, workDir string, sm *session.Manager) *Agent {
@@ -92,10 +96,59 @@ func (a *Agent) persist(msg opencode.Message) {
 func (a *Agent) Abort() {
 	a.mu.Lock()
 	cancel := a.cancel
+	compactionCancel := a.compactionCancel
 	a.mu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
+	if compactionCancel != nil {
+		compactionCancel()
+	}
+}
+
+func (a *Agent) AbortCompaction() {
+	a.mu.Lock()
+	compactionCancel := a.compactionCancel
+	a.mu.Unlock()
+	if compactionCancel != nil {
+		compactionCancel()
+	}
+}
+
+func (a *Agent) AbortAndWait() {
+	a.mu.Lock()
+	cancel := a.cancel
+	compactionCancel := a.compactionCancel
+	a.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if compactionCancel != nil {
+		compactionCancel()
+	}
+
+	for {
+		a.mu.Lock()
+		busy := a.busy
+		a.mu.Unlock()
+		if !busy {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (a *Agent) UpdateConfig(cfg config.Runtime) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.cfg = cfg
+	a.client = opencode.NewClient(cfg.Endpoint, cfg.APIKey, cfg.Model)
+}
+
+func (a *Agent) SetEmit(emit func(core.Event)) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.emit = emit
 }
 
 // Prompt appends a user message and runs the agent loop until the model stops
@@ -114,11 +167,48 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 	if emit != nil {
 		a.emit = emit
 	}
+	a.mu.Unlock()
+
+	a.overflowRecoveryAttempted = false
+
+	// Pre-prompt compaction check
+	if a.session != nil && a.cfg.Compaction.Enabled {
+		pathEntries := a.session.GetBranch(a.session.LeafID())
+		compactionEntry := session.GetLatestCompactionEntry(pathEntries)
+
+		// Find the last assistant message with usage in history
+		var lastUsageEntry *session.FileEntry
+		for i := len(pathEntries) - 1; i >= 0; i-- {
+			if pathEntries[i].Type == session.TypeMessage && pathEntries[i].Message != nil && pathEntries[i].Message.Role == "assistant" && pathEntries[i].Message.Usage != nil {
+				lastUsageEntry = &pathEntries[i]
+				break
+			}
+		}
+
+		skip := false
+		if compactionEntry != nil && lastUsageEntry != nil {
+			tUsage, _ := time.Parse(time.RFC3339Nano, lastUsageEntry.Timestamp)
+			tComp, _ := time.Parse(time.RFC3339Nano, compactionEntry.Timestamp)
+			if tUsage.Before(tComp) || tUsage.Equal(tComp) {
+				skip = true
+			}
+		}
+
+		if !skip {
+			contextWindow := ModelContextWindow(a.cfg.Model, a.cfg.Compaction.ContextWindow)
+			sessionMsgs := a.session.BuildSessionContext().Messages
+			tokens := session.EstimateContextTokens(sessionMsgs).Tokens
+			if session.ShouldCompact(tokens, contextWindow, a.cfg.Compaction) {
+				_, _ = a.RunAutoCompaction(ctx, "threshold", false)
+			}
+		}
+	}
 
 	userMsg := opencode.Message{
 		Role:    "user",
 		Content: opencode.StringContent(userText),
 	}
+	a.mu.Lock()
 	a.messages = append(a.messages, userMsg)
 	a.mu.Unlock()
 
@@ -148,7 +238,15 @@ func (a *Agent) runLoop(ctx context.Context) error {
 		}
 
 		a.mu.Lock()
-		messages := append([]opencode.Message(nil), a.messages...)
+		var messages []opencode.Message
+		if a.session != nil {
+			sessionMsgs := a.session.BuildSessionContext().Messages
+			llmMsgs := session.ConvertToLlm(sessionMsgs)
+			repaired := opencode.RepairToolMessages(llmMsgs)
+			messages = append([]opencode.Message{{Role: "system", Content: opencode.StringContent(systemPrompt)}}, repaired...)
+		} else {
+			messages = append([]opencode.Message(nil), a.messages...)
+		}
 		a.mu.Unlock()
 
 		streamStarted := false
@@ -182,6 +280,27 @@ func (a *Agent) runLoop(ctx context.Context) error {
 				a.interrupted()
 				return nil
 			}
+			// Check for context overflow
+			if a.session != nil && IsContextOverflowError(err) {
+				if !a.overflowRecoveryAttempted {
+					a.overflowRecoveryAttempted = true
+
+					a.mu.Lock()
+					if len(a.messages) > 0 && a.messages[len(a.messages)-1].Role == "assistant" {
+						a.messages = a.messages[:len(a.messages)-1]
+					}
+					a.mu.Unlock()
+
+					compacted, compErr := a.RunAutoCompaction(ctx, "overflow", true)
+					if compErr == nil && compacted {
+						round--
+						continue
+					}
+				} else {
+					a.emitCompactionEnd("overflow", nil, false, false, "Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model.")
+				}
+			}
+
 			a.err(err.Error())
 			return err
 		}
@@ -205,6 +324,66 @@ func (a *Agent) runLoop(ctx context.Context) error {
 			a.messages = append(a.messages, msg)
 			a.mu.Unlock()
 			a.persist(msg)
+
+			// Perform post-turn compaction check
+			if a.session != nil && a.cfg.Compaction.Enabled {
+				pathEntries := a.session.GetBranch(a.session.LeafID())
+				compactionEntry := session.GetLatestCompactionEntry(pathEntries)
+
+				var lastAsst *session.FileEntry
+				for i := len(pathEntries) - 1; i >= 0; i-- {
+					if pathEntries[i].Type == session.TypeMessage && pathEntries[i].Message != nil && pathEntries[i].Message.Role == "assistant" {
+						lastAsst = &pathEntries[i]
+						break
+					}
+				}
+
+				skip := false
+				if lastAsst != nil && compactionEntry != nil {
+					tAsst, _ := time.Parse(time.RFC3339Nano, lastAsst.Timestamp)
+					tComp, _ := time.Parse(time.RFC3339Nano, compactionEntry.Timestamp)
+					if tAsst.Before(tComp) || tAsst.Equal(tComp) {
+						skip = true
+					}
+				}
+
+				if !skip {
+					contextWindow := ModelContextWindow(a.cfg.Model, a.cfg.Compaction.ContextWindow)
+					var tokens int
+					if msg.Usage != nil {
+						tokens = session.CalculateContextTokens(*msg.Usage)
+					} else {
+						var lastUsageEntry *session.FileEntry
+						for i := len(pathEntries) - 1; i >= 0; i-- {
+							if pathEntries[i].Type == session.TypeMessage && pathEntries[i].Message != nil && pathEntries[i].Message.Role == "assistant" && pathEntries[i].Message.Usage != nil {
+								lastUsageEntry = &pathEntries[i]
+								break
+							}
+						}
+
+						usageSkip := false
+						if compactionEntry != nil && lastUsageEntry != nil {
+							tUsage, _ := time.Parse(time.RFC3339Nano, lastUsageEntry.Timestamp)
+							tComp, _ := time.Parse(time.RFC3339Nano, compactionEntry.Timestamp)
+							if tUsage.Before(tComp) || tUsage.Equal(tComp) {
+								usageSkip = true
+							}
+						}
+
+						if !usageSkip {
+							sessionMsgs := a.session.BuildSessionContext().Messages
+							tokens = session.EstimateContextTokens(sessionMsgs).Tokens
+						} else {
+							skip = true
+						}
+					}
+
+					if !skip && session.ShouldCompact(tokens, contextWindow, a.cfg.Compaction) {
+						_, _ = a.RunAutoCompaction(ctx, "threshold", false)
+					}
+				}
+			}
+
 			return nil
 		}
 

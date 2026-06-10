@@ -17,6 +17,19 @@ const (
 
 var ErrNotConnected = errors.New("not connected — run: enough connect")
 
+// ENOUGH_CREDENTIALS_FILE forces file-based storage and skips the OS keyring.
+// Tests set this so go test cannot overwrite the user's session keyring.
+func useKeyring() bool {
+	return os.Getenv("ENOUGH_CREDENTIALS_FILE") == ""
+}
+
+func activeCredentialsPath() (string, error) {
+	if p := os.Getenv("ENOUGH_CREDENTIALS_FILE"); p != "" {
+		return p, nil
+	}
+	return credentialsPath()
+}
+
 func configDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -41,9 +54,11 @@ func SetAPIKey(key string) error {
 		return fmt.Errorf("api key cannot be empty")
 	}
 
-	if err := keyring.Set(keyringService, keyringAccount, key); err == nil {
-		_ = removeFile()
-		return nil
+	if useKeyring() {
+		if err := keyring.Set(keyringService, keyringAccount, key); err == nil {
+			_ = removeFile()
+			return nil
+		}
 	}
 
 	return writeFile(key)
@@ -51,8 +66,10 @@ func SetAPIKey(key string) error {
 
 // GetAPIKey returns the stored API key for the current user.
 func GetAPIKey() (string, error) {
-	if key, err := keyring.Get(keyringService, keyringAccount); err == nil && key != "" {
-		return key, nil
+	if useKeyring() {
+		if key, err := keyring.Get(keyringService, keyringAccount); err == nil && key != "" {
+			return key, nil
+		}
 	}
 
 	key, err := readFile()
@@ -73,21 +90,18 @@ func HasAPIKey() bool {
 
 // DeleteAPIKey removes stored credentials.
 func DeleteAPIKey() error {
-	_ = keyring.Delete(keyringService, keyringAccount)
+	if useKeyring() {
+		_ = keyring.Delete(keyringService, keyringAccount)
+	}
 	return removeFile()
 }
 
 func writeFile(key string) error {
-	dir, err := configDir()
+	path, err := activeCredentialsPath()
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-
-	path, err := credentialsPath()
-	if err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 
@@ -98,7 +112,7 @@ func writeFile(key string) error {
 }
 
 func readFile() (string, error) {
-	path, err := credentialsPath()
+	path, err := activeCredentialsPath()
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +133,7 @@ func readFile() (string, error) {
 }
 
 func removeFile() error {
-	path, err := credentialsPath()
+	path, err := activeCredentialsPath()
 	if err != nil {
 		return err
 	}

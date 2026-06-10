@@ -35,6 +35,8 @@ type Styles struct {
 	SlashName   lipgloss.Style
 	SlashDesc   lipgloss.Style
 	SlashDim    lipgloss.Style
+	CompactionSpinner lipgloss.Style
+	CompactionText    lipgloss.Style
 }
 
 func NewStyles() Styles {
@@ -166,6 +168,12 @@ func NewStyles() Styles {
 		SlashDim: base.Copy().
 			Foreground(textDim).
 			Italic(true),
+
+		CompactionSpinner: base.Copy().
+			Foreground(lipgloss.Color("#66D9EF")),
+
+		CompactionText: base.Copy().
+			Foreground(textDim),
 	}
 }
 

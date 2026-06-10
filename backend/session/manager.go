@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -26,6 +27,9 @@ type Manager struct {
 	entries []json.RawMessage
 	leafID  *string
 	flushed bool
+
+	labelsById          map[string]string
+	labelTimestampsById map[string]string
 }
 
 // ContinueRecent opens the newest session for cwd or starts a fresh one.
@@ -61,36 +65,83 @@ func ContinueRecent(cwd string) (*Manager, error) {
 func (m *Manager) CWD() string        { return m.cwd }
 func (m *Manager) SessionID() string  { return m.sessionID }
 func (m *Manager) SessionFile() string { return m.sessionFile }
+func (m *Manager) LeafID() *string    { return m.leafID }
 
-// Messages returns LLM messages stored in the session (no system prompt).
-func (m *Manager) Messages() []opencode.Message {
-	var out []opencode.Message
+// ParsedEntries returns the session entries parsed into FileEntry structs.
+func (m *Manager) ParsedEntries() []FileEntry {
+	out := make([]FileEntry, 0, len(m.entries))
 	for _, raw := range m.entries {
-		var peek struct {
-			Type string `json:"type"`
+		var entry FileEntry
+		if err := json.Unmarshal(raw, &entry); err == nil {
+			out = append(out, entry)
 		}
-		if json.Unmarshal(raw, &peek) != nil || peek.Type != "message" {
-			continue
-		}
-		var entry MessageEntry
-		if json.Unmarshal(raw, &entry) != nil {
-			continue
-		}
-		if entry.Message.Role == "system" {
-			continue
-		}
-		out = append(out, entry.Message)
 	}
 	return out
 }
 
-// ChatLines returns displayable history for the TUI.
+// GetBranch returns all entries from root to leafID in path order on the active branch.
+func (m *Manager) GetBranch(leafID *string) []FileEntry {
+	return GetBranch(m.ParsedEntries(), leafID)
+}
+
+// BuildSessionContext resolves the messages and settings on the active branch.
+func (m *Manager) BuildSessionContext() SessionContext {
+	return BuildSessionContext(m.ParsedEntries(), m.leafID)
+}
+
+// Messages returns LLM messages stored in the session (no system prompt).
+func (m *Manager) Messages() []opencode.Message {
+	return m.BuildSessionContext().Messages
+}
+
+// ChatLines returns displayable history for the TUI on the active branch.
 func (m *Manager) ChatLines() []ChatLine {
-	msgs := m.Messages()
+	branch := m.GetBranch(m.leafID)
 	var out []ChatLine
 
-	for i := 0; i < len(msgs); i++ {
-		msg := msgs[i]
+	for i := 0; i < len(branch); i++ {
+		entry := branch[i]
+
+		if entry.Type == TypeCompaction {
+			out = append(out, ChatLine{
+				Role:         "compactionSummary",
+				Text:         entry.Summary,
+				TokensBefore: entry.TokensBefore,
+			})
+			continue
+		}
+
+		if entry.Type == TypeBranchSummary {
+			out = append(out, ChatLine{
+				Role: "branchSummary",
+				Text: entry.Summary,
+			})
+			continue
+		}
+
+		if entry.Type == TypeCustomMessage {
+			var text string
+			if s, ok := entry.Content.(string); ok {
+				text = s
+			}
+			display := true
+			if entry.Display != nil {
+				display = *entry.Display
+			}
+			if display {
+				out = append(out, ChatLine{
+					Role: "user",
+					Text: text,
+				})
+			}
+			continue
+		}
+
+		if entry.Type != TypeMessage || entry.Message == nil {
+			continue
+		}
+
+		msg := *entry.Message
 
 		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
 			thinking := ""
@@ -107,10 +158,10 @@ func (m *Manager) ChatLines() []ChatLine {
 					ToolName: tc.Function.Name,
 					ToolArgs: tc.Function.Arguments,
 				}
-				for j := i + 1; j < len(msgs); j++ {
-					tm := msgs[j]
-					if tm.Role == "tool" && tm.ToolCallID == tc.ID {
-						line.ToolResult = strings.TrimSpace(opencode.ContentString(tm))
+				for j := i + 1; j < len(branch); j++ {
+					tm := branch[j]
+					if tm.Type == TypeMessage && tm.Message != nil && tm.Message.Role == "tool" && tm.Message.ToolCallID == tc.ID {
+						line.ToolResult = strings.TrimSpace(opencode.ContentString(*tm.Message))
 						break
 					}
 				}
@@ -168,12 +219,15 @@ func (m *Manager) AppendMessage(msg opencode.Message) error {
 	}
 
 	parent := m.leafID
-	entry := MessageEntry{
-		Type:      "message",
-		ID:        newID(),
-		ParentID:  parent,
-		Timestamp: nowISO(),
-		Message:   msg,
+	id := newID()
+	entry := FileEntry{
+		SessionEntry: SessionEntry{
+			Type:      TypeMessage,
+			ID:        id,
+			ParentID:  parent,
+			Timestamp: nowISO(),
+			Message:   &msg,
+		},
 	}
 
 	raw, err := json.Marshal(entry)
@@ -182,8 +236,70 @@ func (m *Manager) AppendMessage(msg opencode.Message) error {
 	}
 
 	m.entries = append(m.entries, raw)
-	m.leafID = &entry.ID
+	m.leafID = &id
 	return m.persistEntry(raw, msg.Role == "assistant")
+}
+
+// AppendCompaction appends a compaction entry and persists it to JSONL.
+func (m *Manager) AppendCompaction(summary string, firstKeptEntryID string, tokensBefore int, details any, fromHook bool) error {
+	parent := m.leafID
+	id := newID()
+	entry := FileEntry{
+		SessionEntry: SessionEntry{
+			Type:             TypeCompaction,
+			ID:               id,
+			ParentID:         parent,
+			Timestamp:        nowISO(),
+			Summary:          summary,
+			FirstKeptEntryID: firstKeptEntryID,
+			TokensBefore:     tokensBefore,
+			Details:          details,
+			FromHook:         fromHook,
+		},
+	}
+
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+
+	m.entries = append(m.entries, raw)
+	m.leafID = &id
+	return m.persistEntry(raw, true)
+}
+
+// BranchWithSummary branches to a given entry and appends a branch summary entry.
+func (m *Manager) BranchWithSummary(branchFromId *string, summary string, details any, fromHook bool) (string, error) {
+	m.leafID = branchFromId
+	id := newID()
+	fromID := "root"
+	if branchFromId != nil {
+		fromID = *branchFromId
+	}
+	entry := FileEntry{
+		SessionEntry: SessionEntry{
+			Type:      TypeBranchSummary,
+			ID:        id,
+			ParentID:  branchFromId,
+			Timestamp: nowISO(),
+			FromID:    fromID,
+			Summary:   summary,
+			Details:   details,
+			FromHook:  fromHook,
+		},
+	}
+
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		return "", err
+	}
+
+	m.entries = append(m.entries, raw)
+	m.leafID = &id
+	if err := m.persistEntry(raw, true); err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 // NewSession starts a new JSONL file in the same cwd session directory.
@@ -212,6 +328,8 @@ func (m *Manager) newSession() error {
 	m.flushed = false
 	m.sessionFile = filepath.Join(m.sessionDir, fmt.Sprintf("%s_%s.jsonl", fileTimestamp(ts), m.sessionID))
 	m.flushed = false
+	m.labelsById = make(map[string]string)
+	m.labelTimestampsById = make(map[string]string)
 	return nil
 }
 
@@ -251,14 +369,25 @@ func (m *Manager) openFile(path string) error {
 	m.leafID = nil
 	m.flushed = true
 
+	m.labelsById = make(map[string]string)
+	m.labelTimestampsById = make(map[string]string)
+
 	for _, raw := range entries[1:] {
-		var peek struct {
-			Type string `json:"type"`
-			ID   string `json:"id"`
-		}
-		if json.Unmarshal(raw, &peek) == nil && peek.Type != "session" && peek.ID != "" {
-			id := peek.ID
-			m.leafID = &id
+		var entry FileEntry
+		if json.Unmarshal(raw, &entry) == nil && entry.Type != TypeSession && entry.ID != "" {
+			// Don't set leafID to TypeLabel or TypeSessionInfo as active message leaf
+			if entry.Type != TypeLabel && entry.Type != TypeSessionInfo {
+				m.leafID = &entry.ID
+			}
+			if entry.Type == TypeLabel {
+				if entry.Label != "" {
+					m.labelsById[entry.TargetID] = entry.Label
+					m.labelTimestampsById[entry.TargetID] = entry.Timestamp
+				} else {
+					delete(m.labelsById, entry.TargetID)
+					delete(m.labelTimestampsById, entry.TargetID)
+				}
+			}
 		}
 	}
 
@@ -293,8 +422,8 @@ func (m *Manager) persistEntry(entry json.RawMessage, isAssistant bool) error {
 
 func (m *Manager) hasAssistant() bool {
 	for _, raw := range m.entries {
-		var entry MessageEntry
-		if json.Unmarshal(raw, &entry) == nil && entry.Message.Role == "assistant" {
+		var entry FileEntry
+		if json.Unmarshal(raw, &entry) == nil && entry.Type == TypeMessage && entry.Message != nil && entry.Message.Role == "assistant" {
 			return true
 		}
 	}
@@ -389,4 +518,118 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max] + "..."
+}
+
+type SessionTreeNode struct {
+	Entry          FileEntry
+	Children       []*SessionTreeNode
+	Label          string
+	LabelTimestamp string
+}
+
+func (m *Manager) GetTree() []*SessionTreeNode {
+	entries := m.ParsedEntries()
+	nodeMap := make(map[string]*SessionTreeNode)
+	var roots []*SessionTreeNode
+
+	for _, entry := range entries {
+		if entry.ID == "" || entry.Type == TypeSession {
+			continue
+		}
+		label := m.labelsById[entry.ID]
+		labelTS := m.labelTimestampsById[entry.ID]
+		nodeMap[entry.ID] = &SessionTreeNode{
+			Entry:          entry,
+			Children:       []*SessionTreeNode{},
+			Label:          label,
+			LabelTimestamp: labelTS,
+		}
+	}
+
+	for _, entry := range entries {
+		if entry.ID == "" || entry.Type == TypeSession {
+			continue
+		}
+		node := nodeMap[entry.ID]
+		if entry.ParentID == nil || *entry.ParentID == "" || *entry.ParentID == entry.ID {
+			roots = append(roots, node)
+		} else {
+			parent := nodeMap[*entry.ParentID]
+			if parent != nil {
+				parent.Children = append(parent.Children, node)
+			} else {
+				roots = append(roots, node)
+			}
+		}
+	}
+
+	var sortTree func(*SessionTreeNode)
+	sortTree = func(node *SessionTreeNode) {
+		sort.Slice(node.Children, func(i, j int) bool {
+			ti, _ := time.Parse(time.RFC3339Nano, node.Children[i].Entry.Timestamp)
+			tj, _ := time.Parse(time.RFC3339Nano, node.Children[j].Entry.Timestamp)
+			return ti.Before(tj)
+		})
+		for _, child := range node.Children {
+			sortTree(child)
+		}
+	}
+
+	sort.Slice(roots, func(i, j int) bool {
+		ti, _ := time.Parse(time.RFC3339Nano, roots[i].Entry.Timestamp)
+		tj, _ := time.Parse(time.RFC3339Nano, roots[j].Entry.Timestamp)
+		return ti.Before(tj)
+	})
+
+	for _, root := range roots {
+		sortTree(root)
+	}
+
+	return roots
+}
+
+func (m *Manager) AppendLabelChange(targetID string, label string) (string, error) {
+	id := newID()
+	entry := FileEntry{
+		SessionEntry: SessionEntry{
+			Type:      TypeLabel,
+			ID:        id,
+			ParentID:  m.leafID,
+			Timestamp: nowISO(),
+			TargetID:  targetID,
+			Label:     label,
+		},
+	}
+
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		return "", err
+	}
+
+	m.entries = append(m.entries, raw)
+	if err := m.persistEntry(raw, false); err != nil {
+		return "", err
+	}
+	if label != "" {
+		if m.labelsById == nil {
+			m.labelsById = make(map[string]string)
+		}
+		if m.labelTimestampsById == nil {
+			m.labelTimestampsById = make(map[string]string)
+		}
+		m.labelsById[targetID] = label
+		m.labelTimestampsById[targetID] = entry.Timestamp
+	} else {
+		delete(m.labelsById, targetID)
+		delete(m.labelTimestampsById, targetID)
+	}
+	return id, nil
+}
+
+func (m *Manager) Branch(branchFromId string) {
+	m.leafID = &branchFromId
+}
+
+func (m *Manager) ResetLeaf() {
+	m.leafID = nil
 }

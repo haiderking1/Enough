@@ -15,12 +15,20 @@ const (
 	DefaultModel    = "deepseek-v4-flash"
 )
 
+type CompactionSettings struct {
+	Enabled          bool `json:"enabled"`
+	ReserveTokens    int  `json:"reserve_tokens"`
+	KeepRecentTokens int  `json:"keep_recent_tokens"`
+	ContextWindow    int  `json:"context_window,omitempty"`
+}
+
 // Config holds non-secret settings persisted to disk.
 type Config struct {
-	Endpoint      string `json:"endpoint"`
-	Model         string `json:"model"`
-	ThinkingLevel string `json:"thinking_level,omitempty"`
-	HideThinking  bool   `json:"hide_thinking,omitempty"`
+	Endpoint      string              `json:"endpoint"`
+	Model         string              `json:"model"`
+	ThinkingLevel string              `json:"thinking_level,omitempty"`
+	HideThinking  bool                `json:"hide_thinking,omitempty"`
+	Compaction    *CompactionSettings `json:"compaction,omitempty"`
 
 	// legacy field — migrated to secrets store on load, never written back
 	apiKeyLegacy string `json:"-"`
@@ -33,12 +41,18 @@ type Runtime struct {
 	APIKey        string
 	ThinkingLevel string
 	HideThinking  bool
+	Compaction    CompactionSettings
 }
 
 func Default() Config {
 	return Config{
 		Endpoint: DefaultEndpoint,
 		Model:    DefaultModel,
+		Compaction: &CompactionSettings{
+			Enabled:          true,
+			ReserveTokens:    16384,
+			KeepRecentTokens: 20000,
+		},
 	}
 }
 
@@ -59,11 +73,12 @@ func Path() (string, error) {
 }
 
 type fileConfig struct {
-	Endpoint      string `json:"endpoint"`
-	Model         string `json:"model"`
-	ThinkingLevel string `json:"thinking_level,omitempty"`
-	HideThinking  bool   `json:"hide_thinking,omitempty"`
-	APIKey        string `json:"api_key,omitempty"`
+	Endpoint      string              `json:"endpoint"`
+	Model         string              `json:"model"`
+	ThinkingLevel string              `json:"thinking_level,omitempty"`
+	HideThinking  bool                `json:"hide_thinking,omitempty"`
+	APIKey        string              `json:"api_key,omitempty"`
+	Compaction    *CompactionSettings `json:"compaction,omitempty"`
 }
 
 func Load() (Config, error) {
@@ -92,12 +107,22 @@ func Load() (Config, error) {
 	cfg.ThinkingLevel = raw.ThinkingLevel
 	cfg.HideThinking = raw.HideThinking
 	cfg.apiKeyLegacy = raw.APIKey
+	if raw.Compaction != nil {
+		cfg.Compaction = raw.Compaction
+	}
 
 	if cfg.Endpoint == "" {
 		cfg.Endpoint = DefaultEndpoint
 	}
 	if cfg.Model == "" {
 		cfg.Model = DefaultModel
+	}
+	if cfg.Compaction == nil {
+		cfg.Compaction = &CompactionSettings{
+			Enabled:          true,
+			ReserveTokens:    16384,
+			KeepRecentTokens: 20000,
+		}
 	}
 
 	// one-time migration: move api key from config.json into secret store
@@ -116,6 +141,13 @@ func Save(cfg Config) error {
 	}
 	if cfg.Model == "" {
 		cfg.Model = DefaultModel
+	}
+	if cfg.Compaction == nil {
+		cfg.Compaction = &CompactionSettings{
+			Enabled:          true,
+			ReserveTokens:    16384,
+			KeepRecentTokens: 20000,
+		}
 	}
 
 	dir, err := Dir()
@@ -137,6 +169,7 @@ func Save(cfg Config) error {
 		Model:         cfg.Model,
 		ThinkingLevel: cfg.ThinkingLevel,
 		HideThinking:  cfg.HideThinking,
+		Compaction:    cfg.Compaction,
 	}
 
 	data, err := json.MarshalIndent(raw, "", "  ")
@@ -158,12 +191,24 @@ func LoadRuntime() (Runtime, error) {
 		return Runtime{}, err
 	}
 
+	var comp CompactionSettings
+	if cfg.Compaction != nil {
+		comp = *cfg.Compaction
+	} else {
+		comp = CompactionSettings{
+			Enabled:          true,
+			ReserveTokens:    16384,
+			KeepRecentTokens: 20000,
+		}
+	}
+
 	return Runtime{
 		Endpoint:      cfg.Endpoint,
 		Model:         cfg.Model,
 		APIKey:        key,
 		ThinkingLevel: cfg.ThinkingLevel,
 		HideThinking:  cfg.HideThinking,
+		Compaction:    comp,
 	}, nil
 }
 

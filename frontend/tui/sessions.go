@@ -226,13 +226,14 @@ func (a *App) resumeSession(path string) {
 	a.messages = nil
 	for _, line := range sm.ChatLines() {
 		a.messages = append(a.messages, chatMsg{
-			role:       line.Role,
-			text:       line.Text,
-			thinking:   line.Thinking,
-			toolName:   line.ToolName,
-			toolArgs:   line.ToolArgs,
-			toolResult: line.ToolResult,
-			toolError:  line.ToolError,
+			role:         line.Role,
+			text:         line.Text,
+			thinking:     line.Thinking,
+			toolName:     line.ToolName,
+			toolArgs:     line.ToolArgs,
+			toolResult:   line.ToolResult,
+			toolError:    line.ToolError,
+			tokensBefore: line.TokensBefore,
 		})
 	}
 
@@ -243,7 +244,17 @@ func (a *App) resumeSession(path string) {
 	}
 
 	name := filepath.Base(path)
-	a.appendMessage("system", fmt.Sprintf("resumed session · %s", name))
+	nComp := 0
+	for _, entry := range sm.GetBranch(sm.LeafID()) {
+		if entry.Type == session.TypeCompaction {
+			nComp++
+		}
+	}
+	statusMsg := fmt.Sprintf("resumed session · %s", name)
+	if nComp > 0 {
+		statusMsg += fmt.Sprintf(" (compacted %d times)", nComp)
+	}
+	a.appendMessage("system", statusMsg)
 }
 
 func (a *App) startNewSession() {
