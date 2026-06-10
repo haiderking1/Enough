@@ -20,6 +20,7 @@ const (
 	keyTab
 	keyShiftTab
 	keyCtrlT
+	keyCtrlO
 	keyCtrlBackspace
 	keyEscape
 	keyCtrlC
@@ -101,6 +102,8 @@ func (kr *keyReader) parseOne() (parsedKey, int) {
 		return parsedKey{action: keyCtrlC}, 1
 	case 4:
 		return parsedKey{action: keyCtrlD}, 1
+	case 15:
+		return parsedKey{action: keyCtrlO}, 1
 	case 20:
 		return parsedKey{action: keyCtrlT}, 1
 	case '\r', '\n':

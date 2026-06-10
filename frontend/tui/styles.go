@@ -18,6 +18,18 @@ type Styles struct {
 	ThinkingText lipgloss.Style
 	AssistError lipgloss.Style
 	ToolActivity lipgloss.Style
+	ToolAction   lipgloss.Style
+	ToolPath     lipgloss.Style
+	ToolBullet   lipgloss.Style
+	ToolTarget   lipgloss.Style
+	ToolSub      lipgloss.Style
+	ToolRunBox   lipgloss.Style
+	ToolRunText  lipgloss.Style
+	ToolDelta    lipgloss.Style
+	ToolDeltaRemoved lipgloss.Style
+	ToolMuted    lipgloss.Style
+	ToolOutput   lipgloss.Style
+	ToolPending  lipgloss.Style
 	SlashMenu   lipgloss.Style
 	SlashSelected lipgloss.Style
 	SlashName   lipgloss.Style
@@ -90,6 +102,49 @@ func NewStyles() Styles {
 
 		ToolActivity: base.Copy().
 			Foreground(textDim).
+			Italic(true),
+
+		ToolAction: base.Copy().
+			Foreground(text).
+			Bold(true),
+
+		ToolPath: base.Copy().
+			Foreground(lipgloss.Color("#d4d4d4")).
+			Background(lipgloss.Color("#262626")).
+			Padding(0, 1),
+
+		ToolBullet: base.Copy().
+			Foreground(green).
+			Bold(true),
+
+		ToolTarget: base.Copy().
+			Foreground(lipgloss.Color("#737373")),
+
+		ToolSub: base.Copy().
+			Foreground(lipgloss.Color("#737373")),
+
+		ToolRunBox: base.Copy().
+			Foreground(lipgloss.Color("#a3a3a3")).
+			Background(lipgloss.Color("#262626")).
+			Padding(0, 1),
+
+		ToolRunText: base.Copy().
+			Foreground(lipgloss.Color("#a3a3a3")),
+
+		ToolDelta: base.Copy().
+			Foreground(lipgloss.Color("#4ade80")),
+
+		ToolDeltaRemoved: base.Copy().
+			Foreground(lipgloss.Color("#f87171")),
+
+		ToolMuted: base.Copy().
+			Foreground(lipgloss.Color("#737373")),
+
+		ToolOutput: base.Copy().
+			Foreground(textDim),
+
+		ToolPending: base.Copy().
+			Foreground(lipgloss.Color("#737373")).
 			Italic(true),
 
 		SlashMenu: base.Copy().
