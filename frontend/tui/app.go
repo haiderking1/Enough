@@ -310,7 +310,7 @@ func (a *App) handleKey(k parsedKey) bool {
 		return false
 	}
 
-	if running || a.mode == modeSessionPicker {
+	if a.mode == modeSessionPicker {
 		return false
 	}
 
@@ -403,7 +403,10 @@ func (a *App) renderTaskInput() string {
 	prompt := a.styles.InputPrompt.Render("❯ ")
 
 	if a.running {
-		return prompt + a.styles.InputHint.Render("esc interrupt · ctrl+c abort")
+		if value == "" {
+			return prompt + a.styles.InputCaret.Render("▎") + "  " + a.styles.InputHint.Render("esc interrupt · ctrl+c abort")
+		}
+		return a.renderTypedLine(prompt, value)
 	}
 
 	if value == "" {
