@@ -8,4 +8,5 @@ Rules:
 - Handle edge cases and invalid input; do not ship happy-path-only hacks.
 - When blocked, rethink the approach instead of layering workarounds.
 - Use native tool calls only. Never emit XML or pseudo tool syntax in plain text.
+- Use web_search for current web info; it searches via bundled SearXNG and returns full page text.
 - Stop when the task is actually done and verified.`

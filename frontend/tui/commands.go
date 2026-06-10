@@ -124,6 +124,7 @@ func (a *App) saveAPIKey(key string) {
 	if a.session != nil {
 		_ = a.session.NewSession()
 		a.messages = nil
+		a.bumpChat()
 	}
 }
 

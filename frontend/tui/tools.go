@@ -17,6 +17,7 @@ func (a *App) handleToolStart(ev core.ToolCallEvent) {
 		msg.toolAdded, msg.toolRemoved = diffEditFile(ev.Args)
 	}
 	a.messages = append(a.messages, msg)
+	a.bumpChat()
 }
 
 func (a *App) handleToolResult(ev core.ToolCallEvent) {
@@ -34,6 +35,7 @@ func (a *App) handleToolResult(ev core.ToolCallEvent) {
 		msg.toolPending = false
 		msg.toolResult = ev.Result
 		msg.toolError = ev.Error
+		a.bumpChat()
 		return
 	}
 
@@ -43,6 +45,7 @@ func (a *App) handleToolResult(ev core.ToolCallEvent) {
 		toolResult: ev.Result,
 		toolError:  ev.Error,
 	})
+	a.bumpChat()
 }
 
 func (a *App) toggleToolsExpanded() {

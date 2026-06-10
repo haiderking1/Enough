@@ -2,11 +2,10 @@ package tui
 
 import (
 	"strings"
-	"unicode/utf8"
 )
 
 type Editor struct {
-	value  string
+	runes  []rune
 	cursor int // rune index
 	limit  int
 }
@@ -16,11 +15,15 @@ func NewEditor(limit int) Editor {
 }
 
 func (e *Editor) Value() string {
-	return e.value
+	return string(e.runes)
+}
+
+func (e *Editor) Runes() []rune {
+	return e.runes
 }
 
 func (e *Editor) SetValue(v string) {
-	e.value = v
+	e.runes = []rune(v)
 	e.clampCursor()
 }
 
@@ -29,16 +32,14 @@ func (e *Editor) Cursor() int {
 }
 
 func (e *Editor) Insert(r rune) {
-	if e.limit > 0 && utf8.RuneCountInString(e.value) >= e.limit {
+	if e.limit > 0 && len(e.runes) >= e.limit {
 		return
 	}
-	runes := []rune(e.value)
 	pos := e.cursor
-	if pos > len(runes) {
-		pos = len(runes)
+	if pos > len(e.runes) {
+		pos = len(e.runes)
 	}
-	runes = append(runes[:pos], append([]rune{r}, runes[pos:]...)...)
-	e.value = string(runes)
+	e.runes = append(e.runes[:pos], append([]rune{r}, e.runes[pos:]...)...)
 	e.cursor = pos + 1
 }
 
@@ -46,18 +47,16 @@ func (e *Editor) Backspace() {
 	if e.cursor == 0 {
 		return
 	}
-	runes := []rune(e.value)
 	pos := e.cursor - 1
-	e.value = string(append(runes[:pos], runes[pos+1:]...))
+	e.runes = append(e.runes[:pos], e.runes[pos+1:]...)
 	e.cursor = pos
 }
 
 func (e *Editor) Delete() {
-	runes := []rune(e.value)
-	if e.cursor >= len(runes) {
+	if e.cursor >= len(e.runes) {
 		return
 	}
-	e.value = string(append(runes[:e.cursor], runes[e.cursor+1:]...))
+	e.runes = append(e.runes[:e.cursor], e.runes[e.cursor+1:]...)
 }
 
 func (e *Editor) MoveLeft() {
@@ -67,7 +66,7 @@ func (e *Editor) MoveLeft() {
 }
 
 func (e *Editor) MoveRight() {
-	if e.cursor < utf8.RuneCountInString(e.value) {
+	if e.cursor < len(e.runes) {
 		e.cursor++
 	}
 }
@@ -77,11 +76,11 @@ func (e *Editor) Home() {
 }
 
 func (e *Editor) End() {
-	e.cursor = utf8.RuneCountInString(e.value)
+	e.cursor = len(e.runes)
 }
 
 func (e *Editor) clampCursor() {
-	n := utf8.RuneCountInString(e.value)
+	n := len(e.runes)
 	if e.cursor > n {
 		e.cursor = n
 	}

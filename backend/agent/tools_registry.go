@@ -9,5 +9,6 @@ func nativeTools() []opencode.Tool {
 		editFileTool(),
 		listDirTool(),
 		bashTool(),
+		webSearchTool(),
 	}
 }

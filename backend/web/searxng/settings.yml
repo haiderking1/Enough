@@ -1,0 +1,34 @@
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "Enough"
+
+brand:
+  new_issue_url: ""
+  docs_url: ""
+  public_instances: ""
+  wiki_url: ""
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  formats:
+    - html
+    - json
+
+server:
+  bind_address: "127.0.0.1"
+  port: 18752
+  secret_key: "enough-local-searxng"
+  limiter: false
+  public_instance: false
+  image_proxy: false
+
+ui:
+  static_use_hash: false
+
+enabled_plugins: []
+
+doi_resolvers: {}

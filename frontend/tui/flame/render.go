@@ -37,7 +37,7 @@ func (r *Renderer) Stop() {
 	}
 }
 
-func (r *Renderer) Render(lines []string) {
+func (r *Renderer) Render(lines []string, stablePrefix int) {
 	if r.stopped {
 		return
 	}
@@ -51,6 +51,7 @@ func (r *Renderer) Render(lines []string) {
 		height = 24
 	}
 
+	newLines := lines
 	widthChanged := r.previousWidth != 0 && r.previousWidth != width
 	heightChanged := r.previousHeight != 0 && r.previousHeight != height
 	previousBufferLength := height
@@ -70,7 +71,10 @@ func (r *Renderer) Render(lines []string) {
 		return targetScreenRow - currentScreenRow
 	}
 
-	newLines := clampLines(lines, width)
+	diffStart := 0
+	if stablePrefix > 0 && prefixEqual(r.previousLines, newLines, stablePrefix) {
+		diffStart = stablePrefix
+	}
 
 	fullRender := func(clear bool) {
 		var buf strings.Builder
@@ -118,7 +122,7 @@ func (r *Renderer) Render(lines []string) {
 	firstChanged := -1
 	lastChanged := -1
 	maxLines := max(len(newLines), len(r.previousLines))
-	for i := 0; i < maxLines; i++ {
+	for i := diffStart; i < maxLines; i++ {
 		oldLine := ""
 		if i < len(r.previousLines) {
 			oldLine = r.previousLines[i]
@@ -284,6 +288,21 @@ func (r *Renderer) Render(lines []string) {
 	r.previousLines = append([]string(nil), newLines...)
 	r.previousWidth = width
 	r.previousHeight = height
+}
+
+func prefixEqual(a, b []string, n int) bool {
+	if n <= 0 {
+		return false
+	}
+	if len(a) < n || len(b) < n {
+		return false
+	}
+	for i := 0; i < n; i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func clampLines(lines []string, width int) []string {
