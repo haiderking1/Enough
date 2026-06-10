@@ -12,7 +12,9 @@ const (
 	EventAssistantThinkingDelta  = "assistant_thinking_delta"
 	EventAssistantDelta          = "assistant_delta"
 	EventAssistantMessage        = "assistant_message"
-	EventToolActivity     = "tool_activity"
+	EventToolStart    = "tool_start"
+	EventToolResult   = "tool_result"
+	EventToolActivity = "tool_activity" // legacy
 	EventError            = "error"
 	EventSystem           = "system"
 
@@ -25,4 +27,13 @@ const (
 type LogEntry struct {
 	Level   string
 	Message string
+}
+
+// ToolCallEvent carries structured tool UI data to the frontend.
+type ToolCallEvent struct {
+	ID     string
+	Name   string
+	Args   string
+	Result string
+	Error  bool
 }

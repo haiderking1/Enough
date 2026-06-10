@@ -47,7 +47,7 @@ func New(cfg config.Runtime, workDir string, sm *session.Manager) *Agent {
 	}
 
 	if sm != nil {
-		a.messages = append(a.messages, sm.Messages()...)
+		a.messages = append(a.messages, opencode.RepairToolMessages(sm.Messages())...)
 	}
 
 	return a
@@ -65,7 +65,7 @@ func (a *Agent) LoadSession(sm *session.Manager) {
 	a.messages = []opencode.Message{
 		{Role: "system", Content: opencode.StringContent(systemPrompt)},
 	}
-	a.messages = append(a.messages, sm.Messages()...)
+	a.messages = append(a.messages, opencode.RepairToolMessages(sm.Messages())...)
 }
 
 func (a *Agent) Reset() error {
@@ -213,17 +213,27 @@ func (a *Agent) runLoop(ctx context.Context) error {
 		a.mu.Unlock()
 		a.persist(msg)
 
-		for _, call := range msg.ToolCalls {
-			a.toolActivity(call.Function.Name, call.Function.Arguments)
+		for idx, call := range msg.ToolCalls {
+			if err := ctx.Err(); err != nil {
+				a.appendToolStubs(msg.ToolCalls[idx:], "Interrupted")
+				a.interrupted()
+				return nil
+			}
+
+			id := call.ID
+			if id == "" {
+				id = fmt.Sprintf("call_%d", idx)
+				call.ID = id
+			}
+
+			a.toolStart(id, call.Function.Name, call.Function.Arguments)
 
 			result := a.executeTool(call.Function.Name, call.Function.Arguments)
-			if result.isErr {
-				a.toolActivity(call.Function.Name, truncate(result.output, 200))
-			}
+			a.toolResult(id, result.output, result.isErr)
 
 			toolMsg := opencode.Message{
 				Role:       "tool",
-				ToolCallID: call.ID,
+				ToolCallID: id,
 				Name:       call.Function.Name,
 				Content:    opencode.StringContent(result.output),
 			}
@@ -258,14 +268,43 @@ func (a *Agent) thinkingDelta(text string) {
 	}
 }
 
-func (a *Agent) toolActivity(name, args string) {
+func (a *Agent) toolStart(id, name, args string) {
 	if a.emit != nil {
 		a.emit(core.Event{
-			Kind: core.EventToolActivity,
-			Data: fmt.Sprintf("%s(%s)", name, truncate(args, 80)),
+			Kind: core.EventToolStart,
+			Data: core.ToolCallEvent{ID: id, Name: name, Args: args},
 		})
 	}
 }
+
+func (a *Agent) appendToolStubs(calls []opencode.ToolCall, text string) {
+	for idx, call := range calls {
+		id := call.ID
+		if id == "" {
+			id = fmt.Sprintf("call_%d", idx)
+		}
+		toolMsg := opencode.Message{
+			Role:       "tool",
+			ToolCallID: id,
+			Name:       call.Function.Name,
+			Content:    opencode.StringContent(text),
+		}
+		a.mu.Lock()
+		a.messages = append(a.messages, toolMsg)
+		a.mu.Unlock()
+		a.persist(toolMsg)
+	}
+}
+
+func (a *Agent) toolResult(id, result string, isErr bool) {
+	if a.emit != nil {
+		a.emit(core.Event{
+			Kind: core.EventToolResult,
+			Data: core.ToolCallEvent{ID: id, Result: result, Error: isErr},
+		})
+	}
+}
+
 
 func (a *Agent) interrupted() {
 	if a.emit != nil {

@@ -53,6 +53,16 @@ func (a *App) handleAgentEvent(e core.Event) {
 			a.setLastAssistant(text)
 		}
 
+	case core.EventToolStart:
+		if ev, ok := e.Data.(core.ToolCallEvent); ok {
+			a.handleToolStart(ev)
+		}
+
+	case core.EventToolResult:
+		if ev, ok := e.Data.(core.ToolCallEvent); ok {
+			a.handleToolResult(ev)
+		}
+
 	case core.EventToolActivity:
 		if text, ok := e.Data.(string); ok {
 			a.appendMessage("tool", text)

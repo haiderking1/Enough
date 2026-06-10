@@ -28,6 +28,10 @@ type ChatLine struct {
 	Role     string
 	Text     string
 	Thinking string
+	ToolName   string
+	ToolArgs   string
+	ToolResult string
+	ToolError  bool
 }
 
 func nowISO() string {

@@ -8,6 +8,14 @@ type chatMsg struct {
 	role     string // user, assistant, tool, error, system
 	text     string
 	thinking string
+	toolID      string
+	toolName    string
+	toolArgs    string
+	toolResult  string
+	toolError   bool
+	toolPending bool
+	toolAdded   int
+	toolRemoved int
 }
 
 func wrapText(text string, width int) string {
@@ -61,30 +69,69 @@ func wrapWords(text string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderChat(styles Styles, messages []chatMsg, width int, hideThinking bool) string {
+func renderChat(styles Styles, messages []chatMsg, width int, hideThinking, expandTools bool) string {
 	if width <= 0 {
 		width = 80
 	}
 
 	contentW := width - 2
 	var blocks []string
+	var roles []string
 
-	for _, msg := range messages {
+	for i := 0; i < len(messages); i++ {
+		msg := messages[i]
 		switch msg.role {
 		case "user":
-			blocks = append(blocks, renderUser(styles, msg.text, contentW))
+			block := renderUser(styles, msg.text, contentW)
+			if block != "" {
+				blocks = append(blocks, block)
+				roles = append(roles, "user")
+			}
 		case "assistant":
-			blocks = append(blocks, renderAssistant(styles, msg, contentW, hideThinking))
+			block := renderAssistant(styles, msg, contentW, hideThinking)
+			if block != "" {
+				blocks = append(blocks, block)
+				roles = append(roles, "assistant")
+			}
 		case "tool":
-			blocks = append(blocks, styles.ToolActivity.Render("  ⚙ "+msg.text))
+			var group []chatMsg
+			for i < len(messages) && messages[i].role == "tool" {
+				group = append(group, messages[i])
+				i++
+			}
+			i--
+			block := renderToolGroup(styles, group, contentW, expandTools)
+			if block != "" {
+				blocks = append(blocks, block)
+				roles = append(roles, "tool")
+			}
 		case "error":
 			blocks = append(blocks, styles.AssistError.Render("● "+wrapText(msg.text, contentW-4)))
+			roles = append(roles, "error")
 		case "system":
 			blocks = append(blocks, styles.LogDim.Render(wrapText(msg.text, contentW-4)))
+			roles = append(roles, "system")
 		}
 	}
 
-	return strings.Join(blocks, "\n\n")
+	return joinChatBlocks(blocks, roles)
+}
+
+func joinChatBlocks(blocks, roles []string) string {
+	if len(blocks) == 0 {
+		return ""
+	}
+	var out strings.Builder
+	out.WriteString(blocks[0])
+	for i := 1; i < len(blocks); i++ {
+		sep := "\n\n"
+		if roles[i] == "tool" || roles[i-1] == "tool" {
+			sep = "\n"
+		}
+		out.WriteString(sep)
+		out.WriteString(blocks[i])
+	}
+	return out.String()
 }
 
 func renderUser(styles Styles, text string, width int) string {

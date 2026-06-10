@@ -226,9 +226,13 @@ func (a *App) resumeSession(path string) {
 	a.messages = nil
 	for _, line := range sm.ChatLines() {
 		a.messages = append(a.messages, chatMsg{
-			role:     line.Role,
-			text:     line.Text,
-			thinking: line.Thinking,
+			role:       line.Role,
+			text:       line.Text,
+			thinking:   line.Thinking,
+			toolName:   line.ToolName,
+			toolArgs:   line.ToolArgs,
+			toolResult: line.ToolResult,
+			toolError:  line.ToolError,
 		})
 	}
 

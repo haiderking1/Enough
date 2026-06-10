@@ -58,7 +58,7 @@ func (c *Client) ChatStream(ctx context.Context, req ChatRequest, cb StreamCallb
 		req.Model = c.model
 	}
 	req.Stream = true
-	req.Messages = NormalizeMessages(req.Messages, req.Model)
+	req.Messages = RepairToolMessages(NormalizeMessages(req.Messages, req.Model))
 
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -178,6 +178,12 @@ func (c *Client) ChatStream(ctx context.Context, req ChatRequest, cb StreamCallb
 		}
 		for i := 0; i <= maxIdx; i++ {
 			if tc, ok := toolParts[i]; ok {
+				if tc.ID == "" {
+					tc.ID = fmt.Sprintf("stream_call_%d", i)
+				}
+				if tc.Type == "" {
+					tc.Type = "function"
+				}
 				msg.ToolCalls = append(msg.ToolCalls, *tc)
 			}
 		}

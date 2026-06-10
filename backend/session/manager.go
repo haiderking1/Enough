@@ -86,8 +86,43 @@ func (m *Manager) Messages() []opencode.Message {
 
 // ChatLines returns displayable history for the TUI.
 func (m *Manager) ChatLines() []ChatLine {
+	msgs := m.Messages()
 	var out []ChatLine
-	for _, msg := range m.Messages() {
+
+	for i := 0; i < len(msgs); i++ {
+		msg := msgs[i]
+
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			thinking := ""
+			if msg.ReasoningContent != nil {
+				thinking = strings.TrimSpace(*msg.ReasoningContent)
+			}
+			text := strings.TrimSpace(opencode.ContentString(msg))
+			if text != "" || thinking != "" {
+				out = append(out, ChatLine{Role: "assistant", Text: text, Thinking: thinking})
+			}
+			for _, tc := range msg.ToolCalls {
+				line := ChatLine{
+					Role:     "tool",
+					ToolName: tc.Function.Name,
+					ToolArgs: tc.Function.Arguments,
+				}
+				for j := i + 1; j < len(msgs); j++ {
+					tm := msgs[j]
+					if tm.Role == "tool" && tm.ToolCallID == tc.ID {
+						line.ToolResult = strings.TrimSpace(opencode.ContentString(tm))
+						break
+					}
+				}
+				out = append(out, line)
+			}
+			continue
+		}
+
+		if msg.Role == "tool" {
+			continue
+		}
+
 		if line, ok := messageToChatLine(msg); ok {
 			out = append(out, line)
 		}
@@ -110,11 +145,7 @@ func messageToChatLine(msg opencode.Message) (ChatLine, bool) {
 			thinking = strings.TrimSpace(*msg.ReasoningContent)
 		}
 		if len(msg.ToolCalls) > 0 {
-			var parts []string
-			for _, tc := range msg.ToolCalls {
-				parts = append(parts, fmt.Sprintf("%s(%s)", tc.Function.Name, truncate(tc.Function.Arguments, 80)))
-			}
-			return ChatLine{Role: "tool", Text: strings.Join(parts, ", ")}, true
+			return ChatLine{}, false
 		}
 		text := strings.TrimSpace(opencode.ContentString(msg))
 		if text == "" && thinking == "" {
@@ -123,12 +154,7 @@ func messageToChatLine(msg opencode.Message) (ChatLine, bool) {
 		return ChatLine{Role: "assistant", Text: text, Thinking: thinking}, true
 
 	case "tool":
-		name := msg.Name
-		if name == "" {
-			name = "tool"
-		}
-		text := truncate(strings.TrimSpace(opencode.ContentString(msg)), 200)
-		return ChatLine{Role: "tool", Text: name + ": " + text}, true
+		return ChatLine{}, false
 
 	default:
 		return ChatLine{}, false

@@ -43,6 +43,7 @@ type App struct {
 
 	thinkingLevel opencode.ThinkingLevel
 	hideThinking  bool
+	toolsExpanded bool
 
 	greeted bool
 	quit    bool
@@ -163,9 +164,13 @@ func (a *App) initSession() error {
 
 	for _, line := range sm.ChatLines() {
 		a.messages = append(a.messages, chatMsg{
-			role:     line.Role,
-			text:     line.Text,
-			thinking: line.Thinking,
+			role:       line.Role,
+			text:       line.Text,
+			thinking:   line.Thinking,
+			toolName:   line.ToolName,
+			toolArgs:   line.ToolArgs,
+			toolResult: line.ToolResult,
+			toolError:  line.ToolError,
 		})
 	}
 	return nil
@@ -292,6 +297,10 @@ func (a *App) handleKey(k parsedKey) bool {
 			a.toggleThinkingVisibility()
 			a.requestRender()
 			return false
+		case keyCtrlO:
+			a.toggleToolsExpanded()
+			a.requestRender()
+			return false
 		}
 	}
 
@@ -344,7 +353,7 @@ func (a *App) buildLines() []string {
 
 	var lines []string
 
-	chat := renderChat(a.styles, a.messages, w, a.hideThinking)
+	chat := renderChat(a.styles, a.messages, w, a.hideThinking, a.toolsExpanded)
 	if chat != "" {
 		lines = append(lines, strings.Split(chat, "\n")...)
 	}
