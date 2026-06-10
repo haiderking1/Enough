@@ -125,6 +125,11 @@ func (a *App) handleAgentEvent(e core.Event) {
 			a.handleToolStart(ev)
 		}
 
+	case core.EventToolDelta:
+		if ev, ok := e.Data.(core.ToolCallEvent); ok {
+			a.handleToolDelta(ev)
+		}
+
 	case core.EventToolResult:
 		if ev, ok := e.Data.(core.ToolCallEvent); ok {
 			a.handleToolResult(ev)

@@ -1,13 +1,16 @@
 package agent
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 type toolResult struct {
 	output string
 	isErr  bool
 }
 
-func (a *Agent) executeTool(name, argsJSON string) toolResult {
+func (a *Agent) executeTool(ctx context.Context, id, name, argsJSON string) toolResult {
 	switch name {
 	case "read_file":
 		return a.toolReadFile(argsJSON)
@@ -18,7 +21,7 @@ func (a *Agent) executeTool(name, argsJSON string) toolResult {
 	case "list_dir":
 		return a.toolListDir(argsJSON)
 	case "bash":
-		return a.toolBash(argsJSON)
+		return a.toolBash(ctx, id, argsJSON)
 	case "web_search":
 		return a.toolWebSearch(argsJSON)
 	default:

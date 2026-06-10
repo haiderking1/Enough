@@ -20,6 +20,23 @@ func (a *App) handleToolStart(ev core.ToolCallEvent) {
 	a.bumpChat()
 }
 
+// handleToolDelta appends a chunk of live tool output to the matching pending
+// tool message so long-running tools (bash) show progress as it streams.
+func (a *App) handleToolDelta(ev core.ToolCallEvent) {
+	for i := len(a.messages) - 1; i >= 0; i-- {
+		msg := &a.messages[i]
+		if msg.role != "tool" {
+			continue
+		}
+		if ev.ID != "" && msg.toolID != ev.ID {
+			continue
+		}
+		msg.toolResult += ev.Result
+		a.bumpChat()
+		return
+	}
+}
+
 func (a *App) handleToolResult(ev core.ToolCallEvent) {
 	for i := len(a.messages) - 1; i >= 0; i-- {
 		msg := &a.messages[i]

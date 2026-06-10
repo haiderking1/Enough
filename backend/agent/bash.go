@@ -1,12 +1,17 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
+	"sync"
 
 	"github.com/enough/enough/backend/opencode"
 )
+
+const maxBashOutput = 32_000
 
 func bashTool() opencode.Tool {
 	return opencode.Tool{
@@ -25,7 +30,7 @@ func bashTool() opencode.Tool {
 	}
 }
 
-func (a *Agent) toolBash(argsJSON string) toolResult {
+func (a *Agent) toolBash(ctx context.Context, id, argsJSON string) toolResult {
 	var args struct {
 		Command string `json:"command"`
 	}
@@ -33,18 +38,80 @@ func (a *Agent) toolBash(argsJSON string) toolResult {
 		return toolResult{output: err.Error(), isErr: true}
 	}
 
-	cmd := exec.Command("bash", "-lc", args.Command)
+	// CommandContext + the platform Cancel hook means an aborted context (ESC)
+	// actually kills the running process (and its group on unix), instead of
+	// the command running to completion after cancellation.
+	cmd := exec.CommandContext(ctx, "bash", "-lc", args.Command)
 	cmd.Dir = a.workDir
-	out, err := cmd.CombinedOutput()
+	configureProcGroup(cmd)
 
-	const max = 32_000
-	text := string(out)
-	if len(text) > max {
-		text = text[:max] + "\n... truncated ..."
+	sw := &bashStreamWriter{max: maxBashOutput, onChunk: func(chunk string) {
+		a.toolDelta(id, chunk)
+	}}
+	cmd.Stdout = sw
+	cmd.Stderr = sw
+
+	err := cmd.Run()
+	text := sw.String()
+
+	// Interrupted: report whatever was captured plus a clear marker rather than
+	// a raw "signal: killed" error.
+	if ctx.Err() != nil {
+		if text != "" && !strings.HasSuffix(text, "\n") {
+			text += "\n"
+		}
+		return toolResult{output: text + "[interrupted]", isErr: true}
 	}
 
 	if err != nil {
 		return toolResult{output: fmt.Sprintf("%v\n%s", err, text), isErr: true}
 	}
 	return toolResult{output: text}
+}
+
+// bashStreamWriter accumulates command output up to a cap while streaming each
+// appended chunk to onChunk. The streamed chunks concatenate exactly to the
+// final String(), so the live view and the persisted result stay consistent.
+type bashStreamWriter struct {
+	mu        sync.Mutex
+	buf       strings.Builder
+	max       int
+	truncated bool
+	onChunk   func(string)
+}
+
+const truncMarker = "\n... truncated ..."
+
+func (w *bashStreamWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	var emit string
+	if !w.truncated {
+		room := w.max - w.buf.Len()
+		switch {
+		case room <= 0:
+			w.truncated = true
+			w.buf.WriteString(truncMarker)
+			emit = truncMarker
+		case len(p) <= room:
+			w.buf.Write(p)
+			emit = string(p)
+		default:
+			w.buf.Write(p[:room])
+			w.buf.WriteString(truncMarker)
+			w.truncated = true
+			emit = string(p[:room]) + truncMarker
+		}
+	}
+	w.mu.Unlock()
+
+	if emit != "" && w.onChunk != nil {
+		w.onChunk(emit)
+	}
+	return len(p), nil
+}
+
+func (w *bashStreamWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.String()
 }
