@@ -404,7 +404,7 @@ func (a *Agent) runLoop(ctx context.Context) error {
 
 			a.toolStart(id, call.Function.Name, call.Function.Arguments)
 
-			result := a.executeTool(call.Function.Name, call.Function.Arguments)
+			result := a.executeTool(ctx, id, call.Function.Name, call.Function.Arguments)
 			a.toolResult(id, result.output, result.isErr)
 
 			toolMsg := opencode.Message{
@@ -465,6 +465,18 @@ func (a *Agent) appendToolStubs(calls []opencode.ToolCall, text string) {
 		a.messages = append(a.messages, toolMsg)
 		a.mu.Unlock()
 		a.persist(toolMsg)
+	}
+}
+
+// toolDelta streams a chunk of incremental tool output (e.g. live bash stdout)
+// to the frontend so long-running tools show progress instead of only a final
+// result.
+func (a *Agent) toolDelta(id, chunk string) {
+	if a.emit != nil && chunk != "" {
+		a.emit(core.Event{
+			Kind: core.EventToolDelta,
+			Data: core.ToolCallEvent{ID: id, Result: chunk},
+		})
 	}
 }
 

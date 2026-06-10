@@ -253,18 +253,22 @@ func renderReadBlock(styles Styles, row toolRow) []string {
 
 func renderBashBlock(styles Styles, row toolRow, width int, expanded bool) []string {
 	cmd := row.Target
-	if row.Pending {
-		cmd = "…"
-	} else {
-		cmd = term.TruncateWidth(cmd, width-12)
+	if cmd == "" {
+		cmd = "command"
 	}
+	cmd = term.TruncateWidth(cmd, width-12)
 
 	header := styles.ToolBullet.Render("●") + " " +
 		styles.ToolAction.Render("Bash") + " " +
 		styles.ToolTarget.Render(cmd)
 
 	lines := []string{header}
-	if row.Output == "" || row.Pending {
+
+	out := strings.TrimRight(row.Output, "\n")
+	if out == "" {
+		if row.Pending {
+			lines = append(lines, styles.ToolPending.Render("└ running… (esc to cancel)"))
+		}
 		return lines
 	}
 
@@ -273,9 +277,18 @@ func renderBashBlock(styles Styles, row toolRow, width int, expanded bool) []str
 		outStyle = styles.AssistError
 	}
 
-	detail := limitToolOutput(row.Output, expanded)
-	for i, line := range strings.Split(detail, "\n") {
-		if line == "" && i == len(strings.Split(detail, "\n"))-1 {
+	// While streaming and collapsed, show the tail so the newest output is
+	// visible; once finished, show the head with a "more lines" hint.
+	var detail string
+	if row.Pending && !expanded {
+		detail = tailLines(out, 8)
+	} else {
+		detail = limitToolOutput(out, expanded)
+	}
+
+	dl := strings.Split(detail, "\n")
+	for i, line := range dl {
+		if line == "" && i == len(dl)-1 {
 			continue
 		}
 		prefix := "  "
@@ -284,7 +297,22 @@ func renderBashBlock(styles Styles, row toolRow, width int, expanded bool) []str
 		}
 		lines = append(lines, outStyle.Render(prefix+line))
 	}
+
+	if row.Pending {
+		lines = append(lines, styles.ToolPending.Render("  running… (esc to cancel)"))
+	}
 	return lines
+}
+
+// tailLines returns the last n non-trailing-empty lines of text, prefixed with
+// an elision hint when earlier lines were dropped.
+func tailLines(text string, n int) string {
+	lines := strings.Split(text, "\n")
+	if len(lines) <= n {
+		return text
+	}
+	tail := lines[len(lines)-n:]
+	return fmt.Sprintf("… (%d earlier lines)\n", len(lines)-n) + strings.Join(tail, "\n")
 }
 
 func renderGenericLine(styles Styles, row toolRow) string {

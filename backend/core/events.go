@@ -13,6 +13,7 @@ const (
 	EventAssistantDelta          = "assistant_delta"
 	EventAssistantMessage        = "assistant_message"
 	EventToolStart    = "tool_start"
+	EventToolDelta    = "tool_delta" // incremental tool output (e.g. live bash stdout/stderr)
 	EventToolResult   = "tool_result"
 	EventToolActivity = "tool_activity" // legacy
 	EventError            = "error"
