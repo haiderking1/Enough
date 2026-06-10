@@ -236,6 +236,7 @@ func (a *App) resumeSession(path string) {
 			tokensBefore: line.TokensBefore,
 		})
 	}
+	a.bumpChat()
 
 	if a.agent != nil {
 		a.agent.LoadSession(sm)
@@ -276,6 +277,7 @@ func (a *App) startNewSession() {
 	}
 
 	a.messages = nil
+	a.bumpChat()
 	a.appendMessage("system", "new session started")
 }
 

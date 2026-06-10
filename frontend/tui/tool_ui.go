@@ -80,6 +80,10 @@ func parseToolRow(msg chatMsg) toolRow {
 		row.Kind = toolKindBash
 		row.Action = "Bash"
 		row.Target = oneLine(jsonString(args["command"]))
+	case "web_search":
+		row.Kind = toolKindOther
+		row.Action = "Web"
+		row.Target = truncateMiddle(oneLine(jsonString(args["query"])), 56)
 	case "list_dir":
 		row.Kind = toolKindOther
 		row.Action = "List"

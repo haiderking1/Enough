@@ -99,6 +99,137 @@ func renderBranchSummary(styles Styles, msg chatMsg, width int, expanded bool) s
 	return label + " " + styles.LogDim.Render(text)
 }
 
+// chatBlockSpec describes one rendered chat block. fp is a fingerprint of the
+// block's display-relevant content; render produces the block lazily so callers
+// can skip rendering blocks whose fp matches a cached entry.
+type chatBlockSpec struct {
+	role   string
+	fp     uint64
+	render func() string
+}
+
+// Alloc-free FNV-1a helpers. Fingerprinting must stay cheap: it runs over every
+// block on every frame, so reflection-based hashing (fmt "%v") would reintroduce
+// the O(transcript) cost the per-block cache exists to remove.
+const (
+	fnvOffset uint64 = 14695981039346656037
+	fnvPrime  uint64 = 1099511628211
+)
+
+func fnvStr(h uint64, s string) uint64 {
+	for i := 0; i < len(s); i++ {
+		h = (h ^ uint64(s[i])) * fnvPrime
+	}
+	return (h ^ 0) * fnvPrime // field separator so "ab"+"c" != "a"+"bc"
+}
+
+func fnvByte(h uint64, b byte) uint64 { return (h ^ uint64(b)) * fnvPrime }
+
+func fnvInt(h uint64, n int) uint64 {
+	u := uint64(n)
+	for i := 0; i < 8; i++ {
+		h = fnvByte(h, byte(u))
+		u >>= 8
+	}
+	return h
+}
+
+func fnvBool(h uint64, b bool) uint64 {
+	if b {
+		return fnvByte(h, 1)
+	}
+	return fnvByte(h, 0)
+}
+
+// hashMsg folds every display-relevant field of a message into h so any change
+// to a rendered block flips its fingerprint.
+func hashMsg(h uint64, m chatMsg) uint64 {
+	h = fnvStr(h, m.role)
+	h = fnvStr(h, m.text)
+	h = fnvStr(h, m.thinking)
+	h = fnvStr(h, m.toolID)
+	h = fnvStr(h, m.toolName)
+	h = fnvStr(h, m.toolArgs)
+	h = fnvStr(h, m.toolResult)
+	h = fnvBool(h, m.toolError)
+	h = fnvBool(h, m.toolPending)
+	h = fnvInt(h, m.toolAdded)
+	h = fnvInt(h, m.toolRemoved)
+	h = fnvInt(h, m.tokensBefore)
+	return h
+}
+
+// chatBlockSpecs groups messages into blocks (matching renderChat's grouping)
+// without rendering them. width/hideThinking/expandTools are folded into each
+// fp so a change in those invalidates every block.
+func chatBlockSpecs(styles Styles, messages []chatMsg, width int, hideThinking, expandTools bool) []chatBlockSpec {
+	contentW := width - 2
+	var specs []chatBlockSpec
+
+	// Seed every fingerprint with the width and global render flags so a change
+	// to either invalidates the affected blocks.
+	seed := fnvInt(fnvOffset, contentW)
+	seed = fnvBool(seed, hideThinking)
+	seed = fnvBool(seed, expandTools)
+
+	add := func(role string, fp uint64, render func() string) {
+		specs = append(specs, chatBlockSpec{role: role, fp: fp, render: render})
+	}
+
+	for i := 0; i < len(messages); i++ {
+		msg := messages[i]
+		switch msg.role {
+		case "user":
+			m := msg
+			add("user", hashMsg(seed, m), func() string {
+				return renderUser(styles, m.text, contentW)
+			})
+		case "assistant":
+			m := msg
+			add("assistant", hashMsg(seed, m), func() string {
+				return renderAssistant(styles, m, contentW, hideThinking)
+			})
+		case "tool":
+			var group []chatMsg
+			for i < len(messages) && messages[i].role == "tool" {
+				group = append(group, messages[i])
+				i++
+			}
+			i--
+			g := group
+			fp := seed
+			for _, t := range g {
+				fp = hashMsg(fp, t)
+			}
+			add("tool", fp, func() string {
+				return renderToolGroup(styles, g, contentW, expandTools)
+			})
+		case "compactionSummary":
+			m := msg
+			add("compactionSummary", hashMsg(seed, m), func() string {
+				return renderCompactionSummary(styles, m, contentW, expandTools)
+			})
+		case "branchSummary":
+			m := msg
+			add("branchSummary", hashMsg(seed, m), func() string {
+				return renderBranchSummary(styles, m, contentW, expandTools)
+			})
+		case "error":
+			m := msg
+			add("error", hashMsg(seed, m), func() string {
+				return styles.AssistError.Render("● " + wrapText(m.text, contentW-4))
+			})
+		case "system":
+			m := msg
+			add("system", hashMsg(seed, m), func() string {
+				return styles.LogDim.Render(wrapText(m.text, contentW-4))
+			})
+		}
+	}
+
+	return specs
+}
+
 // renderChat formats the messages list.
 // Note: Ctrl+O toggles expandTools, which in Enough's scrolling-only chat layout
 // globally expands both tool call outputs and compaction/branch summary details.
@@ -108,56 +239,16 @@ func renderChat(styles Styles, messages []chatMsg, width int, hideThinking, expa
 		width = 80
 	}
 
-	contentW := width - 2
+	specs := chatBlockSpecs(styles, messages, width, hideThinking, expandTools)
 	var blocks []string
 	var roles []string
-
-	for i := 0; i < len(messages); i++ {
-		msg := messages[i]
-		switch msg.role {
-		case "user":
-			block := renderUser(styles, msg.text, contentW)
-			if block != "" {
-				blocks = append(blocks, block)
-				roles = append(roles, "user")
-			}
-		case "assistant":
-			block := renderAssistant(styles, msg, contentW, hideThinking)
-			if block != "" {
-				blocks = append(blocks, block)
-				roles = append(roles, "assistant")
-			}
-		case "tool":
-			var group []chatMsg
-			for i < len(messages) && messages[i].role == "tool" {
-				group = append(group, messages[i])
-				i++
-			}
-			i--
-			block := renderToolGroup(styles, group, contentW, expandTools)
-			if block != "" {
-				blocks = append(blocks, block)
-				roles = append(roles, "tool")
-			}
-		case "compactionSummary":
-			block := renderCompactionSummary(styles, msg, contentW, expandTools)
-			if block != "" {
-				blocks = append(blocks, block)
-				roles = append(roles, "compactionSummary")
-			}
-		case "branchSummary":
-			block := renderBranchSummary(styles, msg, contentW, expandTools)
-			if block != "" {
-				blocks = append(blocks, block)
-				roles = append(roles, "branchSummary")
-			}
-		case "error":
-			blocks = append(blocks, styles.AssistError.Render("● "+wrapText(msg.text, contentW-4)))
-			roles = append(roles, "error")
-		case "system":
-			blocks = append(blocks, styles.LogDim.Render(wrapText(msg.text, contentW-4)))
-			roles = append(roles, "system")
+	for _, spec := range specs {
+		block := spec.render()
+		if block == "" {
+			continue
 		}
+		blocks = append(blocks, block)
+		roles = append(roles, spec.role)
 	}
 
 	return joinChatBlocks(blocks, roles)

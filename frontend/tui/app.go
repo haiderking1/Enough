@@ -56,11 +56,20 @@ type App struct {
 	hideThinking  bool
 	toolsExpanded bool
 
+	chatRevision uint64
+	chatCache    chatRenderCache
+	chatBlocks   chatBlockCache
+	footerCache  footerRenderCache
+	composerCache composerRenderCache
+
 	greeted bool
 	quit    bool
 
 	lastSigintTime time.Time
 	escFlush       *time.Timer
+	renderTimer    *time.Timer
+	renderPending  bool
+	lastRenderAt   time.Time
 
 	mu       sync.Mutex
 	renderCh chan struct{}
@@ -74,13 +83,6 @@ func newApp(t *term.Terminal) *App {
 		styles:   NewStyles(),
 		editor:   NewEditor(512),
 		renderCh: make(chan struct{}, 1),
-	}
-}
-
-func (a *App) requestRender() {
-	select {
-	case a.renderCh <- struct{}{}:
-	default:
 	}
 }
 
@@ -99,11 +101,12 @@ func (a *App) run() error {
 		a.width = a.term.Columns()
 		a.height = a.term.Rows()
 		a.mu.Unlock()
-		a.requestRender()
+		a.requestRenderNow()
 	}); err != nil {
 		return err
 	}
 	defer func() {
+		a.stopRenderTimer()
 		a.renderer.Stop()
 		a.term.Stop()
 	}()
@@ -118,7 +121,9 @@ func (a *App) run() error {
 		a.appendMessage("system", "not connected — type / to connect")
 	}
 	a.greeted = true
-	a.renderer.Render(a.buildLines())
+	if lines, prefix := a.buildLines(); len(lines) > 0 {
+		a.renderer.Render(lines, prefix)
+	}
 
 	escFlush := time.NewTimer(0)
 	if !escFlush.Stop() {
@@ -175,9 +180,9 @@ func (a *App) run() error {
 
 		case <-a.renderCh:
 			a.mu.Lock()
-			lines := a.buildLines()
+			lines, prefix := a.buildLines()
 			a.mu.Unlock()
-			a.renderer.Render(lines)
+			a.renderer.Render(lines, prefix)
 
 		case <-compactionTick.C:
 			a.mu.Lock()
@@ -214,7 +219,7 @@ func (a *App) initSession() error {
 			tokensBefore: line.TokensBefore,
 		})
 	}
-
+	a.bumpChat()
 	return nil
 }
 
@@ -247,6 +252,7 @@ func (a *App) reloadChatFromSession() {
 			tokensBefore: line.TokensBefore,
 		})
 	}
+	a.bumpChat()
 }
 
 func (a *App) handleInput(data []byte) {
@@ -417,95 +423,94 @@ func (a *App) applyEditorKey(k parsedKey) {
 	}
 }
 
-func (a *App) buildLines() []string {
+func (a *App) buildLines() (out []string, stablePrefix int) {
 	w := a.width
 	if w <= 0 {
 		w = 80
 	}
 
-	var lines []string
-
-	chat := renderChat(a.styles, a.messages, w, a.hideThinking, a.toolsExpanded)
-	if chat != "" {
-		lines = append(lines, strings.Split(chat, "\n")...)
+	if chatLines := a.chatLines(w); len(chatLines) > 0 {
+		out = append(out, chatLines...)
 	}
+	stablePrefix = len(out)
 
 	if menu := a.renderSlashMenu(w); menu != "" {
-		if len(lines) > 0 {
-			lines = append(lines, "")
+		if len(out) > 0 {
+			out = append(out, "")
 		}
-		lines = append(lines, strings.Split(menu, "\n")...)
+		out = append(out, clampSplitLines(strings.Split(menu, "\n"), w)...)
 	}
 
 	if picker := a.renderSessionPicker(w); picker != "" {
-		if len(lines) > 0 {
-			lines = append(lines, "")
+		if len(out) > 0 {
+			out = append(out, "")
 		}
-		lines = append(lines, strings.Split(picker, "\n")...)
+		out = append(out, clampSplitLines(strings.Split(picker, "\n"), w)...)
 	}
 
 	if a.mode == modeTreePicker {
 		if picker := a.renderTreePicker(w); picker != "" {
-			if len(lines) > 0 {
-				lines = append(lines, "")
+			if len(out) > 0 {
+				out = append(out, "")
 			}
-			lines = append(lines, strings.Split(picker, "\n")...)
+			out = append(out, clampSplitLines(strings.Split(picker, "\n"), w)...)
 		}
 	}
 
 	if loader := a.renderCompactionLoader(); loader != "" {
-		if len(lines) > 0 {
-			lines = append(lines, "")
+		if len(out) > 0 {
+			out = append(out, "")
 		}
-		lines = append(lines, loader)
+		out = append(out, clampSplitLines([]string{loader}, w)...)
 	}
 
-	composer := a.composerStyle().
-		Width(w - 2).
-		Render(a.renderTaskInput())
-	lines = append(lines, strings.Split(composer, "\n")...)
-
-	if footer := a.renderFooter(w); len(footer) > 0 {
-		lines = append(lines, footer...)
+	composer := a.composerLines(w)
+	if len(composer) > 0 {
+		out = append(out, composer...)
 	}
 
-	// Pad top so composer + footer stay at bottom when content is short (Flame-style).
+	if footer := a.footerLines(w); len(footer) > 0 {
+		out = append(out, clampSplitLines(footer, w)...)
+	}
+
 	h := a.height
 	if h <= 0 {
 		h = 24
 	}
-	for len(lines) < h {
-		lines = append([]string{""}, lines...)
+	for len(out) < h {
+		out = append([]string{""}, out...)
+		stablePrefix++
 	}
 
-	return lines
+	return out, stablePrefix
 }
 
 func (a *App) renderTaskInput() string {
-	value := a.editor.Value()
+	runes := a.editor.Runes()
+	cursor := a.editor.Cursor()
 
 	if a.mode == modeConnect {
 		prompt := a.styles.InputPrompt.Render("key ")
-		if value == "" {
+		if len(runes) == 0 {
 			return prompt + a.styles.InputCaret.Render("▎") + a.styles.InputHint.Render(connectPlaceholder)
 		}
-		return a.renderTypedLine(prompt, value)
+		return a.renderTypedLine(prompt, runes, cursor)
 	}
 
 	prompt := a.styles.InputPrompt.Render("❯ ")
 
 	if a.running {
-		if value == "" {
+		if len(runes) == 0 {
 			hint := "esc interrupt · ctrl+c abort"
 			if a.compacting {
 				hint = "compacting... esc cancel · ctrl+c abort"
 			}
 			return prompt + a.styles.InputCaret.Render("▎") + "  " + a.styles.InputHint.Render(hint)
 		}
-		return a.renderTypedLine(prompt, value)
+		return a.renderTypedLine(prompt, runes, cursor)
 	}
 
-	if value == "" {
+	if len(runes) == 0 {
 		hint := taskPlaceholder
 		if !auth.Connected() {
 			hint = "type / for commands..."
@@ -513,12 +518,10 @@ func (a *App) renderTaskInput() string {
 		return prompt + a.styles.InputCaret.Render("▎") + a.styles.InputHint.Render(hint)
 	}
 
-	return a.renderTypedLine(prompt, value)
+	return a.renderTypedLine(prompt, runes, cursor)
 }
 
-func (a *App) renderTypedLine(prompt, value string) string {
-	pos := a.editor.Cursor()
-	runes := []rune(value)
+func (a *App) renderTypedLine(prompt string, runes []rune, pos int) string {
 	if pos < 0 {
 		pos = 0
 	}
@@ -544,12 +547,14 @@ func (a *App) appendMessage(role, text string) {
 		return
 	}
 	a.messages = append(a.messages, chatMsg{role: role, text: text})
+	a.bumpChat()
 	a.requestRender()
 }
 
 func (a *App) ensureAssistantBubble() *chatMsg {
 	if len(a.messages) == 0 || a.messages[len(a.messages)-1].role != "assistant" {
 		a.messages = append(a.messages, chatMsg{role: "assistant"})
+		a.bumpChat()
 	}
 	return &a.messages[len(a.messages)-1]
 }
@@ -560,6 +565,7 @@ func (a *App) appendAssistantDelta(delta string) {
 	}
 	last := a.ensureAssistantBubble()
 	last.text += delta
+	a.bumpChat()
 }
 
 func (a *App) appendAssistantThinkingDelta(delta string) {
@@ -568,6 +574,7 @@ func (a *App) appendAssistantThinkingDelta(delta string) {
 	}
 	last := a.ensureAssistantBubble()
 	last.thinking += delta
+	a.bumpChat()
 }
 
 func (a *App) setLastAssistant(text string) {
@@ -577,9 +584,11 @@ func (a *App) setLastAssistant(text string) {
 	}
 	if len(a.messages) > 0 && a.messages[len(a.messages)-1].role == "assistant" {
 		a.messages[len(a.messages)-1].text = text
+		a.bumpChat()
 		return
 	}
 	a.messages = append(a.messages, chatMsg{role: "assistant", text: text})
+	a.bumpChat()
 }
 
 func (a *App) runSlashCommand(name string) {

@@ -19,6 +19,8 @@ func (a *Agent) executeTool(name, argsJSON string) toolResult {
 		return a.toolListDir(argsJSON)
 	case "bash":
 		return a.toolBash(argsJSON)
+	case "web_search":
+		return a.toolWebSearch(argsJSON)
 	default:
 		return toolResult{output: fmt.Sprintf("unknown tool: %s", name), isErr: true}
 	}
