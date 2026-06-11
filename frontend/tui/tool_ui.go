@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/enough/enough/frontend/tui/term"
 )
 
@@ -219,9 +220,9 @@ func renderSpawnHeader(styles Styles, id, role, status string, attempts int, ani
 	if attempts > 1 && !animating {
 		retryPart = " " + styles.ToolMuted.Render(fmt.Sprintf("×%d", attempts))
 	}
-	return spawnBullet(styles, animating, spinnerFrame) + " " +
-		styles.ToolAction.Render("Spawned") + " " +
+	head := styles.ToolAction.Render("Spawned") + " " +
 		styles.LogAccent.Render(id) + rolePart + statusPart + retryPart
+	return lipgloss.JoinHorizontal(lipgloss.Bottom, spawnBullet(styles, animating, spinnerFrame), " ", head)
 }
 
 type swarmWorkerInfo struct {

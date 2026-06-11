@@ -60,12 +60,19 @@ func TestRenderWebSearchBlock(t *testing.T) {
 	}
 }
 
-func TestSpawnBulletAnimatesWhileRunning(t *testing.T) {
+func TestSpawnBulletRendersInSwarmBlock(t *testing.T) {
 	styles := NewStyles()
-	spinning := ansi.Strip(spawnBullet(styles, true, 1))
-	static := ansi.Strip(spawnBullet(styles, false, 1))
-	if spinning != "*" || static != "*" {
-		t.Fatalf("bullet should stay * for alignment, got spinning=%q static=%q", spinning, static)
+	lines := renderAgentSwarmBlock(styles, toolRow{
+		Kind:    toolKindSwarm,
+		Args:    `{"tasks":[{"id":"a","prompt":"ping"}]}`,
+		Pending: true,
+	}, 100, false, 2)
+	plain := ansi.Strip(strings.Join(lines, "\n"))
+	if !strings.Contains(plain, "Spawned") {
+		t.Fatalf("expected spawn header: %q", plain)
+	}
+	if strings.Contains(plain, "*") {
+		t.Fatalf("swarm beacon should not use asterisk bullet: %q", plain)
 	}
 }
 

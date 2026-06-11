@@ -1,7 +1,5 @@
 package tui
 
-var brailleSpinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-
 func (a *App) setCompacting(active bool, label string) {
 	a.compacting = active
 	if active {
@@ -23,8 +21,7 @@ func (a *App) renderCompactionLoader() string {
 		label = "Compacting context..."
 	}
 
-	frame := a.compactionFrame % len(brailleSpinner)
-	spinner := a.styles.CompactionSpinner.Render(brailleSpinner[frame])
+	spinner := a.styles.CompactionSpinner.Render(npmSpinnerAt(a.compactionFrame))
 	text := a.styles.CompactionText.Render(label)
 	hint := a.styles.LogDim.Render("(escape to cancel)")
 
