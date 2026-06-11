@@ -31,36 +31,42 @@ type App struct {
 	messages    []chatMsg
 	slashCursor int
 
-	sessionPickerItems        []session.Info
-	sessionPickerCursor       int
-	sessionPickerAll          bool
+	sessionPickerItems         []session.Info
+	sessionPickerCursor        int
+	sessionPickerAll           bool
 	sessionPickerConfirmDelete string
 	sessionPickerStatus        string
 
-	treePickerNodes            []FlatTreeNode
-	treePickerCursor           int
-	treePickerConfirm          int
-	treePickerChoice           int
-	treePickerTarget           string
+	treePickerNodes   []FlatTreeNode
+	treePickerCursor  int
+	treePickerConfirm int
+	treePickerChoice  int
+	treePickerTarget  string
 
-	running                    bool
-	compacting                 bool
-	compactionLabel            string
-	compactionFrame            int
-	toolSpinnerFrame           int
-	compactionQueuedMessages   []string
-	agentCh                    <-chan core.Event
-	agent                      *agent.Agent
-	session                    *session.Manager
+	running                  bool
+	compacting               bool
+	compactionLabel          string
+	compactionFrame          int
+	activityPhase            activityPhase
+	activityFrame            int
+	activityWordIndex        int
+	nextActivityWordIndex    int
+	lastActivityWordIndex    int
+	activityStreamSegments   int
+	toolSpinnerFrame         int
+	compactionQueuedMessages []string
+	agentCh                  <-chan core.Event
+	agent                    *agent.Agent
+	session                  *session.Manager
 
 	thinkingLevel opencode.ThinkingLevel
 	hideThinking  bool
 	toolsExpanded bool
 
-	chatRevision uint64
-	chatCache    chatRenderCache
-	chatBlocks   chatBlockCache
-	footerCache  footerRenderCache
+	chatRevision  uint64
+	chatCache     chatRenderCache
+	chatBlocks    chatBlockCache
+	footerCache   footerRenderCache
 	composerCache composerRenderCache
 
 	greeted bool
@@ -78,12 +84,13 @@ type App struct {
 
 func newApp(t *term.Terminal) *App {
 	return &App{
-		term:     t,
-		renderer: flame.NewRenderer(t),
-		keys:     newKeyReader(),
-		styles:   NewStyles(),
-		editor:   NewEditor(512),
-		renderCh: make(chan struct{}, 1),
+		term:                  t,
+		renderer:              flame.NewRenderer(t),
+		keys:                  newKeyReader(),
+		styles:                NewStyles(),
+		editor:                NewEditor(512),
+		lastActivityWordIndex: -1,
+		renderCh:              make(chan struct{}, 1),
 	}
 }
 
@@ -157,6 +164,7 @@ func (a *App) run() error {
 				a.mu.Lock()
 				a.running = false
 				a.agentCh = nil
+				a.stopAgentActivity()
 				a.mu.Unlock()
 			} else {
 				a.handleAgentEvent(e)
@@ -167,6 +175,7 @@ func (a *App) run() error {
 							a.mu.Lock()
 							a.running = false
 							a.agentCh = nil
+							a.stopAgentActivity()
 							a.mu.Unlock()
 							goto agentEventsDone
 						}
@@ -191,12 +200,16 @@ func (a *App) run() error {
 			if compacting {
 				a.compactionFrame++
 			}
+			animatingActivity := a.agentActivityVisible()
+			if animatingActivity {
+				a.tickAgentActivity()
+			}
 			animatingTools := a.hasAnimatingTools()
 			if animatingTools {
 				a.toolSpinnerFrame++
 			}
 			a.mu.Unlock()
-			if compacting || animatingTools {
+			if compacting || animatingActivity || animatingTools {
 				a.requestRender()
 			}
 		}
@@ -463,6 +476,13 @@ func (a *App) buildLines() (out []string, stablePrefix int) {
 	}
 
 	if loader := a.renderCompactionLoader(); loader != "" {
+		if len(out) > 0 {
+			out = append(out, "")
+		}
+		out = append(out, clampSplitLines([]string{loader}, w)...)
+	}
+
+	if loader := a.renderAgentActivityLoader(); loader != "" {
 		if len(out) > 0 {
 			out = append(out, "")
 		}

@@ -3,38 +3,40 @@ package tui
 import "github.com/charmbracelet/lipgloss"
 
 type Styles struct {
-	Text        lipgloss.Style
-	LogDim      lipgloss.Style
-	LogAccent   lipgloss.Style
-	LogWarn     lipgloss.Style
-	LogErr      lipgloss.Style
-	LogOk       lipgloss.Style
-	InputBox    lipgloss.Style
-	InputPrompt lipgloss.Style
-	InputHint   lipgloss.Style
-	InputCaret  lipgloss.Style
-	AssistBullet lipgloss.Style
-	AssistText  lipgloss.Style
-	ThinkingText lipgloss.Style
-	AssistError lipgloss.Style
-	ToolActivity lipgloss.Style
-	ToolAction   lipgloss.Style
-	ToolPath     lipgloss.Style
-	ToolBullet   lipgloss.Style
-	ToolTarget   lipgloss.Style
-	ToolSub      lipgloss.Style
-	ToolRunBox   lipgloss.Style
-	ToolRunText  lipgloss.Style
-	ToolDelta    lipgloss.Style
-	ToolDeltaRemoved lipgloss.Style
-	ToolMuted    lipgloss.Style
-	ToolOutput   lipgloss.Style
-	ToolPending  lipgloss.Style
-	SlashMenu   lipgloss.Style
-	SlashSelected lipgloss.Style
-	SlashName   lipgloss.Style
-	SlashDesc   lipgloss.Style
-	SlashDim    lipgloss.Style
+	Text              lipgloss.Style
+	LogDim            lipgloss.Style
+	LogAccent         lipgloss.Style
+	LogWarn           lipgloss.Style
+	LogErr            lipgloss.Style
+	LogOk             lipgloss.Style
+	InputBox          lipgloss.Style
+	InputPrompt       lipgloss.Style
+	InputHint         lipgloss.Style
+	InputCaret        lipgloss.Style
+	AssistBullet      lipgloss.Style
+	AssistText        lipgloss.Style
+	ActivityBullet    lipgloss.Style
+	ActivityText      lipgloss.Style
+	ThinkingText      lipgloss.Style
+	AssistError       lipgloss.Style
+	ToolActivity      lipgloss.Style
+	ToolAction        lipgloss.Style
+	ToolPath          lipgloss.Style
+	ToolBullet        lipgloss.Style
+	ToolTarget        lipgloss.Style
+	ToolSub           lipgloss.Style
+	ToolRunBox        lipgloss.Style
+	ToolRunText       lipgloss.Style
+	ToolDelta         lipgloss.Style
+	ToolDeltaRemoved  lipgloss.Style
+	ToolMuted         lipgloss.Style
+	ToolOutput        lipgloss.Style
+	ToolPending       lipgloss.Style
+	SlashMenu         lipgloss.Style
+	SlashSelected     lipgloss.Style
+	SlashName         lipgloss.Style
+	SlashDesc         lipgloss.Style
+	SlashDim          lipgloss.Style
 	CompactionSpinner lipgloss.Style
 	CompactionText    lipgloss.Style
 	FooterWarn        lipgloss.Style
@@ -95,6 +97,14 @@ func NewStyles() Styles {
 
 		AssistText: base.Copy().
 			Foreground(text),
+
+		ActivityBullet: base.Copy().
+			Foreground(lipgloss.Color("#f59e8b")).
+			Bold(true),
+
+		ActivityText: base.Copy().
+			Foreground(lipgloss.Color("#f59e8b")).
+			Bold(true),
 
 		ThinkingText: base.Copy().
 			Foreground(lipgloss.Color("#8b8b9a")).

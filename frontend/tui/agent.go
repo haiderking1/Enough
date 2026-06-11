@@ -12,6 +12,7 @@ import (
 
 func (a *App) startAgent(task string) {
 	a.running = true
+	a.beginAgentActivity()
 	ch := make(chan core.Event, 64)
 	a.agentCh = ch
 
@@ -103,6 +104,7 @@ func (a *App) handleAgentEvent(e core.Event) {
 		}
 
 	case core.EventAssistantStart:
+		a.onAssistantStreamStart()
 		a.ensureAssistantBubble()
 
 	case core.EventAssistantThinkingDelta:
