@@ -29,6 +29,16 @@ func NewClient(baseURL, apiKey, model string) *Client {
 	}
 }
 
+func (c *Client) withoutTimeout() *Client {
+	cp := *c
+	if c.httpClient != nil {
+		next := *c.httpClient
+		next.Timeout = 0
+		cp.httpClient = &next
+	}
+	return &cp
+}
+
 func (c *Client) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
 	if req.Model == "" {
 		req.Model = c.model

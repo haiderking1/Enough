@@ -25,9 +25,11 @@ type Agent struct {
 	emit    func(core.Event)
 	session *session.Manager
 
-	messages []opencode.Message
-	busy     bool
-	cancel   context.CancelFunc
+	messages        []opencode.Message
+	busy            bool
+	cancel          context.CancelFunc
+	userAbortCtx    context.Context
+	userAbortCancel context.CancelFunc
 
 	// swarmDepth tracks nested agent_swarm nesting (0 = main agent).
 	swarmDepth int
@@ -56,6 +58,31 @@ func New(cfg config.Runtime, workDir string, sm *session.Manager) *Agent {
 	}
 
 	return a
+}
+
+type userAbortContextKey struct{}
+
+func withUserAbortContext(ctx context.Context, done <-chan struct{}) context.Context {
+	if done == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, userAbortContextKey{}, done)
+}
+
+func userAbortDone(ctx context.Context) <-chan struct{} {
+	if done, ok := ctx.Value(userAbortContextKey{}).(<-chan struct{}); ok && done != nil {
+		return done
+	}
+	return ctx.Done()
+}
+
+func userAbortFired(ctx context.Context) bool {
+	select {
+	case <-userAbortDone(ctx):
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *Agent) Session() *session.Manager {
@@ -98,7 +125,11 @@ func (a *Agent) Abort() {
 	a.mu.Lock()
 	cancel := a.cancel
 	compactionCancel := a.compactionCancel
+	userAbortCancel := a.userAbortCancel
 	a.mu.Unlock()
+	if userAbortCancel != nil {
+		userAbortCancel()
+	}
 	if cancel != nil {
 		cancel()
 	}
@@ -120,7 +151,11 @@ func (a *Agent) AbortAndWait() {
 	a.mu.Lock()
 	cancel := a.cancel
 	compactionCancel := a.compactionCancel
+	userAbortCancel := a.userAbortCancel
 	a.mu.Unlock()
+	if userAbortCancel != nil {
+		userAbortCancel()
+	}
 	if cancel != nil {
 		cancel()
 	}
@@ -162,7 +197,11 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 	}
 	a.busy = true
 	ctx, cancel := context.WithCancel(ctx)
+	userAbortCtx, userAbortCancel := context.WithCancel(context.Background())
+	ctx = withUserAbortContext(ctx, userAbortCtx.Done())
 	a.cancel = cancel
+	a.userAbortCtx = userAbortCtx
+	a.userAbortCancel = userAbortCancel
 	a.cfg = cfg
 	a.client = opencode.NewClient(cfg.Endpoint, cfg.APIKey, cfg.Model)
 	if emit != nil {
@@ -220,6 +259,8 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 		a.mu.Lock()
 		a.busy = false
 		a.cancel = nil
+		a.userAbortCtx = nil
+		a.userAbortCancel = nil
 		a.mu.Unlock()
 	}()
 
@@ -492,7 +533,6 @@ func (a *Agent) toolResult(id, result string, isErr bool) {
 		})
 	}
 }
-
 
 func (a *Agent) interrupted() {
 	if a.emit != nil {

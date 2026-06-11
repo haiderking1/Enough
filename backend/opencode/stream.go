@@ -5,10 +5,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type streamChunk struct {
@@ -38,6 +42,13 @@ type StreamCallbacks struct {
 	OnThinking func(string)
 }
 
+type streamStatusError struct {
+	status int
+	msg    string
+}
+
+func (e streamStatusError) Error() string { return e.msg }
+
 type toolCallPartial struct {
 	Index    int    `json:"index"`
 	ID       string `json:"id,omitempty"`
@@ -59,6 +70,65 @@ func reasoningDelta(d streamDelta) string {
 
 // ChatStream streams an assistant reply with separate text and thinking deltas.
 func (c *Client) ChatStream(ctx context.Context, req ChatRequest, cb StreamCallbacks) (Message, error) {
+	return c.chatStreamOnce(ctx, req, cb)
+}
+
+// ChatStreamRetry is used by swarm worker/planner streams. It removes the
+// http.Client timeout ambiguity and retries transport/SSE failures that are
+// usually transient at provider edges.
+func (c *Client) ChatStreamRetry(ctx context.Context, req ChatRequest, cb StreamCallbacks) (Message, error) {
+	workerClient := c.withoutTimeout()
+	var lastErr error
+	for attempt := 0; attempt < 4; attempt++ {
+		msg, err := workerClient.chatStreamOnce(ctx, req, cb)
+		if err == nil {
+			return msg, nil
+		}
+		lastErr = err
+		if ctx.Err() != nil || !isRetriableStreamError(err) || attempt == 3 {
+			return Message{}, err
+		}
+		delay := 250 * time.Millisecond << attempt
+		if delay > 5*time.Second {
+			delay = 5 * time.Second
+		}
+		jitter := time.Duration(rand.Int64N(int64(delay / 4)))
+		timer := time.NewTimer(delay + jitter)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return Message{}, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return Message{}, lastErr
+}
+
+func isRetriableStreamError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var status streamStatusError
+	if errors.As(err, &status) {
+		return status.status == http.StatusTooManyRequests ||
+			status.status == http.StatusBadGateway ||
+			status.status == http.StatusServiceUnavailable
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "connection reset") ||
+		strings.Contains(text, "unexpected eof") ||
+		strings.Contains(text, "empty sse") ||
+		strings.Contains(text, "stream reset")
+}
+
+func (c *Client) chatStreamOnce(ctx context.Context, req ChatRequest, cb StreamCallbacks) (Message, error) {
 	if req.Model == "" {
 		req.Model = c.model
 	}
@@ -91,16 +161,20 @@ func (c *Client) ChatStream(ctx context.Context, req ChatRequest, cb StreamCallb
 		raw, _ := io.ReadAll(resp.Body)
 		var apiErr ChatResponse
 		_ = json.Unmarshal(raw, &apiErr)
+		var msg string
 		if apiErr.Error != nil && apiErr.Error.Message != "" {
-			return Message{}, fmt.Errorf("opencode %d: %s", resp.StatusCode, apiErr.Error.Message)
+			msg = fmt.Sprintf("opencode %d: %s", resp.StatusCode, apiErr.Error.Message)
+		} else {
+			msg = fmt.Sprintf("opencode %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
 		}
-		return Message{}, fmt.Errorf("opencode %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+		return Message{}, streamStatusError{status: resp.StatusCode, msg: msg}
 	}
 
 	var content strings.Builder
 	var reasoning strings.Builder
 	var lastUsage *Usage
 	toolParts := make(map[int]*ToolCall)
+	sawData := false
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -117,6 +191,7 @@ func (c *Client) ChatStream(ctx context.Context, req ChatRequest, cb StreamCallb
 		if data == "[DONE]" {
 			break
 		}
+		sawData = true
 
 		var chunk streamChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
@@ -171,6 +246,9 @@ func (c *Client) ChatStream(ctx context.Context, req ChatRequest, cb StreamCallb
 	}
 	if err := scanner.Err(); err != nil {
 		return Message{}, err
+	}
+	if !sawData {
+		return Message{}, fmt.Errorf("opencode: empty SSE body")
 	}
 
 	msg := Message{Role: "assistant", Usage: lastUsage}
