@@ -1,7 +1,12 @@
 package tui
 
 import (
+	"fmt"
+	"os"
 	"strings"
+
+	"github.com/enough/enough/backend/config"
+	"github.com/enough/enough/backend/skills"
 )
 
 func (a *App) slashActive() bool {
@@ -31,7 +36,48 @@ func (a *App) filteredSlashCommands() []slashCommand {
 			out = append(out, cmd)
 		}
 	}
+
+	cfg, workDir := a.slashSkillsContext()
+	if !cfg.Skills.Enabled || !cfg.Skills.EnableSkillCommands {
+		return out
+	}
+
+	discovered, _ := skills.DiscoverAllSkills(workDir, cfg.Skills.Paths, cfg.Skills.Disabled)
+	for _, sk := range discovered {
+		slug := "skill:" + skills.SkillNameToSlashSlug(sk.Name)
+		if filter == "" || strings.HasPrefix(slug, filter) {
+			desc := sk.Description
+			if len(desc) > 50 {
+				desc = desc[:47] + "..."
+			}
+			out = append(out, slashCommand{
+				name: slug,
+				desc: fmt.Sprintf("run skill: %s (%s)", sk.Name, desc),
+			})
+		}
+	}
+
 	return out
+}
+
+func (a *App) slashSkillsContext() (config.Runtime, string) {
+	if a.agent != nil {
+		return a.agent.Cfg(), a.agent.WorkDir()
+	}
+
+	cfg, err := config.LoadRuntime()
+	if err != nil {
+		return config.Runtime{}, ""
+	}
+
+	workDir := ""
+	if a.session != nil {
+		workDir = a.session.CWD()
+	}
+	if workDir == "" {
+		workDir, _ = os.Getwd()
+	}
+	return cfg, workDir
 }
 
 func (a *App) clampSlashCursor() {

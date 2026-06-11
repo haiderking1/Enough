@@ -18,11 +18,15 @@ Installs the built binary according to the project `Makefile`.
 
 ## Configuration
 
-Enough stores config at:
+Enough stores config and runtime data under `~/.enough/` (override with `ENOUGH_HOME`):
 
 ```text
-~/.config/enough/config.json
+~/.enough/config.json          # settings
+~/.enough/skills/              # global skills library
+~/.enough/agent/sessions/      # session transcripts
 ```
+
+On first run, Enough migrates an existing `~/.config/enough/config.json` into `~/.enough/config.json`.
 
 Defaults live in `backend/config/config.go`:
 
@@ -30,6 +34,16 @@ Defaults live in `backend/config/config.go`:
 - model: `deepseek-v4-flash`
 
 The API key is stored via the secrets backend, not written to `config.json`.
+
+## Skills
+
+Skills are reusable procedural instructions (Markdown with YAML frontmatter). Enough discovers them from:
+
+- `~/.enough/skills/` — global library (`skill_manage` writes here)
+- `{project}/.enough/skills/` — project skills (win name collisions)
+- `~/.cursor/skills/` and `{project}/.cursor/skills/` — Cursor-compatible paths
+
+Use `/skills` in the TUI to list discovered skills, `/skill:<name> <args>` to run one, and `/skill-archive <name>` or `/skill-restore <name>` to manage the global library. See `backend/skills/enough_skill/SKILL.md` for the full slash-command reference.
 
 ## Tools
 

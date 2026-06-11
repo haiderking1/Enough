@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/enough/enough/backend/enoughhome"
 )
 
 const (
@@ -14,11 +16,7 @@ const (
 )
 
 func HomeAgentDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, AgentDirName, AgentSubdir), nil
+	return filepath.Join(enoughhome.HomeDir(), AgentSubdir), nil
 }
 
 func EncodeCWD(cwd string) string {

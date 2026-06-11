@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/enough/enough/backend/enoughhome"
 	"github.com/enough/enough/backend/secrets"
 )
 
@@ -22,6 +23,41 @@ type CompactionSettings struct {
 	ContextWindow    int  `json:"context_window,omitempty"`
 }
 
+// EvidenceConfig controls the v2 evidence runtime. Enabled=false restores
+// v1 behavior (no ledger, no tool guard) for emergency rollback.
+type EvidenceConfig struct {
+	Enabled             bool `json:"enabled"`
+	StrictVerifyReset   bool `json:"strict_verify_reset"`
+	MaxCompletionRounds int  `json:"max_completion_rounds"`
+	VerifierEnabled     bool `json:"verifier_enabled"`
+
+	// ContinuityReads seeds read credit at turn start for agent-authored
+	// files whose on-disk hash still matches the last recorded mutation.
+	// Pointer so configs written before this field existed default to true.
+	ContinuityReads *bool `json:"continuity_reads,omitempty"`
+}
+
+// ContinuityEnabled resolves the default-true tri-state.
+func (e EvidenceConfig) ContinuityEnabled() bool {
+	return e.ContinuityReads == nil || *e.ContinuityReads
+}
+
+func DefaultEvidence() EvidenceConfig {
+	return EvidenceConfig{
+		Enabled:             true,
+		StrictVerifyReset:   true,
+		MaxCompletionRounds: 12,
+		VerifierEnabled:     true,
+	}
+}
+
+type SkillsSettings struct {
+	Enabled             bool     `json:"enabled"`
+	EnableSkillCommands bool     `json:"enable_skill_commands"`
+	Paths               []string `json:"paths"`
+	Disabled            []string `json:"disabled"`
+}
+
 // Config holds non-secret settings persisted to disk.
 type Config struct {
 	Endpoint      string              `json:"endpoint"`
@@ -29,6 +65,8 @@ type Config struct {
 	ThinkingLevel string              `json:"thinking_level,omitempty"`
 	HideThinking  bool                `json:"hide_thinking,omitempty"`
 	Compaction    *CompactionSettings `json:"compaction,omitempty"`
+	Evidence      *EvidenceConfig     `json:"evidence,omitempty"`
+	Skills        *SkillsSettings     `json:"skills,omitempty"`
 
 	// legacy field — migrated to secrets store on load, never written back
 	apiKeyLegacy string `json:"-"`
@@ -42,6 +80,8 @@ type Runtime struct {
 	ThinkingLevel string
 	HideThinking  bool
 	Compaction    CompactionSettings
+	Evidence      EvidenceConfig
+	Skills        SkillsSettings
 }
 
 func Default() Config {
@@ -53,15 +93,15 @@ func Default() Config {
 			ReserveTokens:    16384,
 			KeepRecentTokens: 20000,
 		},
+		Skills: &SkillsSettings{
+			Enabled:             true,
+			EnableSkillCommands: true,
+		},
 	}
 }
 
 func Dir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".config", "enough"), nil
+	return enoughhome.HomeDir(), nil
 }
 
 func Path() (string, error) {
@@ -79,6 +119,8 @@ type fileConfig struct {
 	HideThinking  bool                `json:"hide_thinking,omitempty"`
 	APIKey        string              `json:"api_key,omitempty"`
 	Compaction    *CompactionSettings `json:"compaction,omitempty"`
+	Evidence      *EvidenceConfig     `json:"evidence,omitempty"`
+	Skills        *SkillsSettings     `json:"skills,omitempty"`
 }
 
 func Load() (Config, error) {
@@ -91,6 +133,52 @@ func Load() (Config, error) {
 
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
+		// Migration: check if old ~/.config/enough/config.json exists
+		home, err := os.UserHomeDir()
+		if err == nil {
+			oldPath := filepath.Join(home, ".config", "enough", "config.json")
+			oldData, err := os.ReadFile(oldPath)
+			if err == nil {
+				var raw fileConfig
+				if err := json.Unmarshal(oldData, &raw); err == nil {
+					cfg.Endpoint = raw.Endpoint
+					cfg.Model = raw.Model
+					cfg.ThinkingLevel = raw.ThinkingLevel
+					cfg.HideThinking = raw.HideThinking
+					cfg.apiKeyLegacy = raw.APIKey
+					if raw.Compaction != nil {
+						cfg.Compaction = raw.Compaction
+					}
+					if raw.Evidence != nil {
+						cfg.Evidence = raw.Evidence
+					}
+					if raw.Skills != nil {
+						cfg.Skills = raw.Skills
+					}
+					if cfg.Endpoint == "" {
+						cfg.Endpoint = DefaultEndpoint
+					}
+					if cfg.Model == "" {
+						cfg.Model = DefaultModel
+					}
+					if cfg.Compaction == nil {
+						cfg.Compaction = &CompactionSettings{
+							Enabled:          true,
+							ReserveTokens:    16384,
+							KeepRecentTokens: 20000,
+						}
+					}
+					if cfg.Skills == nil {
+						cfg.Skills = &SkillsSettings{
+							Enabled:             true,
+							EnableSkillCommands: true,
+						}
+					}
+					_ = Save(cfg)
+					return cfg, nil
+				}
+			}
+		}
 		return cfg, nil
 	}
 	if err != nil {
@@ -110,6 +198,12 @@ func Load() (Config, error) {
 	if raw.Compaction != nil {
 		cfg.Compaction = raw.Compaction
 	}
+	if raw.Evidence != nil {
+		cfg.Evidence = raw.Evidence
+	}
+	if raw.Skills != nil {
+		cfg.Skills = raw.Skills
+	}
 
 	if cfg.Endpoint == "" {
 		cfg.Endpoint = DefaultEndpoint
@@ -122,6 +216,12 @@ func Load() (Config, error) {
 			Enabled:          true,
 			ReserveTokens:    16384,
 			KeepRecentTokens: 20000,
+		}
+	}
+	if cfg.Skills == nil {
+		cfg.Skills = &SkillsSettings{
+			Enabled:             true,
+			EnableSkillCommands: true,
 		}
 	}
 
@@ -149,6 +249,12 @@ func Save(cfg Config) error {
 			KeepRecentTokens: 20000,
 		}
 	}
+	if cfg.Skills == nil {
+		cfg.Skills = &SkillsSettings{
+			Enabled:             true,
+			EnableSkillCommands: true,
+		}
+	}
 
 	dir, err := Dir()
 	if err != nil {
@@ -170,6 +276,8 @@ func Save(cfg Config) error {
 		ThinkingLevel: cfg.ThinkingLevel,
 		HideThinking:  cfg.HideThinking,
 		Compaction:    cfg.Compaction,
+		Evidence:      cfg.Evidence,
+		Skills:        cfg.Skills,
 	}
 
 	data, err := json.MarshalIndent(raw, "", "  ")
@@ -202,6 +310,21 @@ func LoadRuntime() (Runtime, error) {
 		}
 	}
 
+	ev := DefaultEvidence()
+	if cfg.Evidence != nil {
+		ev = *cfg.Evidence
+	}
+
+	var sk SkillsSettings
+	if cfg.Skills != nil {
+		sk = *cfg.Skills
+	} else {
+		sk = SkillsSettings{
+			Enabled:             true,
+			EnableSkillCommands: true,
+		}
+	}
+
 	return Runtime{
 		Endpoint:      cfg.Endpoint,
 		Model:         cfg.Model,
@@ -209,6 +332,8 @@ func LoadRuntime() (Runtime, error) {
 		ThinkingLevel: cfg.ThinkingLevel,
 		HideThinking:  cfg.HideThinking,
 		Compaction:    comp,
+		Evidence:      ev,
+		Skills:        sk,
 	}, nil
 }
 

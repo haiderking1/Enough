@@ -64,6 +64,12 @@ type App struct {
 	hideThinking  bool
 	toolsExpanded bool
 
+	// evidenceCount is the current turn's evidence ledger size (v2 runtime).
+	evidenceCount int
+
+	// obligationState is the latest obligation snapshot for the current turn.
+	obligationState *core.ObligationEvent
+
 	chatRevision  uint64
 	chatCache     chatRenderCache
 	chatBlocks    chatBlockCache
@@ -260,6 +266,10 @@ func (a *App) reloadChatFromSession() {
 		return
 	}
 	for _, line := range a.session.ChatLines() {
+		// Runtime-injected continuation notices are model plumbing, not chat.
+		if line.Role == "user" && strings.HasPrefix(line.Text, core.RuntimeNoticePrefix) {
+			continue
+		}
 		a.messages = append(a.messages, chatMsg{
 			role:         line.Role,
 			text:         line.Text,

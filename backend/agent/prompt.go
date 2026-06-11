@@ -1,5 +1,10 @@
 package agent
 
+import (
+	"github.com/enough/enough/backend/config"
+	"github.com/enough/enough/backend/skills"
+)
+
 const systemPrompt = `You are Enough, a coding agent optimized for fast, precise execution.
 
 Rules:
@@ -19,3 +24,44 @@ Commitment — never abandon started work:
 - Once you pick an approach and begin executing, finish it. Do not stop with "this is too complex", "here are your options", or "move on" unless the user explicitly asks to stop or pivot.
 - If one path fails, try the next path yourself. Use agent_swarm for parallel exploration or implementation when appropriate.
 - Report failures as data ("tried X, failed because Y, next trying Z"), not as reasons to quit.`
+
+func BuildSystemPrompt(workDir string, cfg config.Runtime, toolNames []string) string {
+	base := systemPrompt
+	if cfg.Skills.Enabled {
+		if hasSkillTools(toolNames) {
+			base += "\n\n" + skills.BuildIndexPrompt(workDir, cfg, toolNames)
+			if hasSkillManage(toolNames) {
+				base += "\n\n" + skills.GuidanceBlock
+			}
+		} else {
+			sks, _ := skills.DiscoverAllSkills(workDir, cfg.Skills.Paths, cfg.Skills.Disabled)
+			if len(sks) > 0 {
+				base += skills.FormatSkillsForPrompt(sks)
+			}
+		}
+	}
+	return base
+}
+
+func hasSkillTools(toolNames []string) bool {
+	hasList := false
+	hasView := false
+	for _, t := range toolNames {
+		if t == "skills_list" {
+			hasList = true
+		}
+		if t == "skill_view" {
+			hasView = true
+		}
+	}
+	return hasList && hasView
+}
+
+func hasSkillManage(toolNames []string) bool {
+	for _, t := range toolNames {
+		if t == "skill_manage" {
+			return true
+		}
+	}
+	return false
+}

@@ -57,7 +57,7 @@ func (a *Agent) ReloadMessagesFromSession() {
 		return
 	}
 	sessionMsgs := a.session.BuildSessionContext().Messages
-	a.messages = append([]opencode.Message{{Role: "system", Content: opencode.StringContent(systemPrompt)}}, sessionMsgs...)
+	a.messages = append([]opencode.Message{{Role: "system", Content: opencode.StringContent(a.systemPrompt())}}, sessionMsgs...)
 }
 
 func (a *Agent) emitCompactionEnd(reason string, result *session.CompactionResult, aborted, willRetry bool, errMsg string) {

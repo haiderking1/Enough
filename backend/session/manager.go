@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/enough/enough/backend/opencode"
@@ -30,6 +31,9 @@ type Manager struct {
 
 	labelsById          map[string]string
 	labelTimestampsById map[string]string
+
+	fpOnce       sync.Once
+	fingerprints *FingerprintStore
 }
 
 // ContinueRecent opens the newest session for cwd or starts a fresh one.

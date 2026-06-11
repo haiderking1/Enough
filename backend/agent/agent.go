@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/enough/enough/backend/agent/evidence"
+	"github.com/enough/enough/backend/agent/obligations"
 	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/core"
 	"github.com/enough/enough/backend/opencode"
@@ -34,6 +36,26 @@ type Agent struct {
 	// swarmDepth tracks nested agent_swarm nesting (0 = main agent).
 	swarmDepth int
 
+	// ledger is the per-turn evidence ledger; reset on each user prompt.
+	// Swarm workers are separate Agent values, so each holds its own fork.
+	ledger *evidence.Ledger
+
+	// obligations tracks the current turn's proof obligations (main agent
+	// only; nil for swarm workers and the verifier shares the parent's).
+	obligations *obligations.Registry
+
+	// allowedTools, when non-nil, restricts this agent to the listed tools
+	// (used by the verifier role). Enforced in guardTool, not by prompt.
+	allowedTools map[string]bool
+
+	// lastUserPrompt is the task text of the current turn, handed to the
+	// verifier as context.
+	lastUserPrompt string
+
+	// completionRounds counts worker/verifier cycles this turn, capped by
+	// cfg.Evidence.MaxCompletionRounds.
+	completionRounds int
+
 	compactionCancel          context.CancelFunc
 	overflowRecoveryAttempted bool
 }
@@ -48,9 +70,9 @@ func New(cfg config.Runtime, workDir string, sm *session.Manager) *Agent {
 		client:  opencode.NewClient(cfg.Endpoint, cfg.APIKey, cfg.Model),
 		workDir: workDir,
 		session: sm,
-		messages: []opencode.Message{
-			{Role: "system", Content: opencode.StringContent(systemPrompt)},
-		},
+	}
+	a.messages = []opencode.Message{
+		{Role: "system", Content: opencode.StringContent(a.systemPrompt())},
 	}
 
 	if sm != nil {
@@ -95,7 +117,7 @@ func (a *Agent) LoadSession(sm *session.Manager) {
 	defer a.mu.Unlock()
 	a.session = sm
 	a.messages = []opencode.Message{
-		{Role: "system", Content: opencode.StringContent(systemPrompt)},
+		{Role: "system", Content: opencode.StringContent(a.systemPrompt())},
 	}
 	a.messages = append(a.messages, opencode.RepairToolMessages(sm.Messages())...)
 }
@@ -105,7 +127,7 @@ func (a *Agent) Reset() error {
 	defer a.mu.Unlock()
 
 	a.messages = []opencode.Message{
-		{Role: "system", Content: opencode.StringContent(systemPrompt)},
+		{Role: "system", Content: opencode.StringContent(a.systemPrompt())},
 	}
 
 	if a.session != nil {
@@ -210,6 +232,27 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 	a.mu.Unlock()
 
 	a.overflowRecoveryAttempted = false
+	turnID := fmt.Sprintf("turn_%d", time.Now().UnixNano())
+	a.resetEvidenceLedger(turnID)
+
+	a.mu.Lock()
+	a.lastUserPrompt = userText
+	a.completionRounds = 0
+	if a.cfg.Evidence.Enabled {
+		verifyCmd := obligations.DetectVerifyCommand(a.workDir)
+		a.obligations = obligations.NewRegistry(turnID, verifyCmd,
+			a.cfg.Evidence.StrictVerifyReset, a.cfg.Evidence.VerifierEnabled)
+	} else {
+		a.obligations = nil
+	}
+	a.mu.Unlock()
+
+	// Session continuity: silently restore read credit for files this agent
+	// authored in prior turns, iff their on-disk content is unchanged. The
+	// guard stays hostile to everything else.
+	if a.cfg.Evidence.Enabled && a.cfg.Evidence.ContinuityEnabled() && a.session != nil {
+		evidence.SeedContinuityReads(a.evidenceLedger(), sessionFingerprints(a.session))
+	}
 
 	// Pre-prompt compaction check
 	if a.session != nil && a.cfg.Compaction.Enabled {
@@ -268,7 +311,7 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 }
 
 func (a *Agent) runLoop(ctx context.Context) error {
-	tools := nativeTools()
+	tools := nativeTools(a.cfg)
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -285,9 +328,12 @@ func (a *Agent) runLoop(ctx context.Context) error {
 			sessionMsgs := a.session.BuildSessionContext().Messages
 			llmMsgs := session.ConvertToLlm(sessionMsgs)
 			repaired := opencode.RepairToolMessages(llmMsgs)
-			messages = append([]opencode.Message{{Role: "system", Content: opencode.StringContent(systemPrompt)}}, repaired...)
+			messages = append([]opencode.Message{{Role: "system", Content: opencode.StringContent(a.systemPrompt())}}, repaired...)
 		} else {
 			messages = append([]opencode.Message(nil), a.messages...)
+			if len(messages) > 0 && messages[0].Role == "system" {
+				messages[0].Content = opencode.StringContent(a.systemPrompt())
+			}
 		}
 		cfg := a.cfg
 		a.mu.Unlock()
@@ -366,6 +412,14 @@ func (a *Agent) runLoop(ctx context.Context) error {
 			a.messages = append(a.messages, msg)
 			a.mu.Unlock()
 			a.persist(msg)
+
+			// Completion contract: a text-only response does not end the turn
+			// while proof obligations are open. enforceCompletion runs the
+			// verifier and, if obligations remain, injects the fixed
+			// turn-incomplete notice and sends the loop around again.
+			if a.enforceCompletion(ctx) {
+				continue
+			}
 
 			// Perform post-turn compaction check
 			if a.session != nil && a.cfg.Compaction.Enabled {
@@ -544,4 +598,25 @@ func (a *Agent) err(text string) {
 	if a.emit != nil {
 		a.emit(core.Event{Kind: core.EventError, Data: text})
 	}
+}
+
+func (a *Agent) systemPrompt() string {
+	tools := nativeTools(a.cfg)
+	var toolNames []string
+	for _, t := range tools {
+		toolNames = append(toolNames, t.Function.Name)
+	}
+	return BuildSystemPrompt(a.workDir, a.cfg, toolNames)
+}
+
+func (a *Agent) Cfg() config.Runtime {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.cfg
+}
+
+func (a *Agent) WorkDir() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.workDir
 }
