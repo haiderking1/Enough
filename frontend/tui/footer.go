@@ -9,6 +9,7 @@ import (
 	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/opencode"
 	"github.com/enough/enough/backend/session"
+	"github.com/enough/enough/backend/skills"
 	"github.com/enough/enough/frontend/tui/term"
 )
 
@@ -74,6 +75,15 @@ func (a *App) renderFooter(width int) []string {
 			thinking = cfg.ThinkingLevel
 		}
 	}
+
+	skillsEnabled := false
+	var skillsPaths []string
+	var skillsDisabled []string
+	if err == nil {
+		skillsEnabled = cfg.Skills.Enabled
+		skillsPaths = cfg.Skills.Paths
+		skillsDisabled = cfg.Skills.Disabled
+	}
 	if runCfg, runErr := config.LoadRuntime(); runErr == nil {
 		if runCfg.Model != "" {
 			model = runCfg.Model
@@ -84,6 +94,9 @@ func (a *App) renderFooter(width int) []string {
 		if runCfg.ThinkingLevel != "" {
 			thinking = runCfg.ThinkingLevel
 		}
+		skillsEnabled = runCfg.Skills.Enabled
+		skillsPaths = runCfg.Skills.Paths
+		skillsDisabled = runCfg.Skills.Disabled
 	}
 
 	contextWindow := agent.ModelContextWindow(model, 0)
@@ -127,12 +140,22 @@ func (a *App) renderFooter(width int) []string {
 	}
 	rightSide = fmt.Sprintf("(%s) %s", footerProviderLabel(endpoint), rightSide)
 
+	if a.evidenceCount > 0 {
+		statsLeft += a.styles.LogDim.Render(fmt.Sprintf(" · ev %d", a.evidenceCount))
+	}
+
+	if skillsEnabled {
+		discovered, _ := skills.DiscoverAllSkills(a.session.CWD(), skillsPaths, skillsDisabled)
+		statsLeft += a.styles.LogDim.Render(fmt.Sprintf(" · skills %d", len(discovered)))
+	}
+
 	statsLine := footerJoin(width, statsLeft, a.styles.LogDim.Render(rightSide))
 
 	pwd := footerPWD(a.session.CWD())
 	pwdLine := a.styles.LogDim.Render(term.TruncateWidth(pwd, width))
 
-	return []string{pwdLine, statsLine}
+	lines := a.renderObligations(width)
+	return append(lines, pwdLine, statsLine)
 }
 
 func footerJoin(width int, left, right string) string {

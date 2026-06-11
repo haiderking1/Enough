@@ -43,10 +43,10 @@ func TestWorkerToolsCapNestingAtMaxDepth(t *testing.T) {
 }
 
 func TestAgentSwarmToolRegistration(t *testing.T) {
-	if !hasTool(nativeTools(), "agent_swarm") {
+	if !hasTool(nativeTools(config.Runtime{}), "agent_swarm") {
 		t.Fatal("main agent is missing agent_swarm")
 	}
-	if hasTool(nativeTools(), "agent") {
+	if hasTool(nativeTools(config.Runtime{}), "agent") {
 		t.Fatal("main agent should not expose legacy agent tool")
 	}
 }

@@ -112,6 +112,25 @@ func parseToolRow(msg chatMsg) toolRow {
 		if goal := jsonString(args["goal"]); goal != "" {
 			row.Target = oneLine(goal)
 		}
+	case "skills_list":
+		row.Kind = toolKindOther
+		row.Action = "skills_list"
+		if cat := jsonString(args["category"]); cat != "" {
+			row.Target = "[" + cat + "]"
+		} else {
+			row.Target = "all categories"
+		}
+	case "skill_view":
+		row.Kind = toolKindOther
+		row.Action = "skill_view"
+		row.Target = jsonString(args["name"])
+		if fp := jsonString(args["file_path"]); fp != "" {
+			row.Target += " (" + fp + ")"
+		}
+	case "skill_manage":
+		row.Kind = toolKindOther
+		row.Action = "skill_manage"
+		row.Target = jsonString(args["action"]) + " " + jsonString(args["name"])
 	default:
 		row.Kind = toolKindOther
 		row.Action = toolActionLabel(name)
@@ -457,6 +476,14 @@ func renderToolBlock(styles Styles, row toolRow, width int, expanded bool, spinn
 	case toolKindWeb:
 		return renderWebSearchBlock(styles, row, width, expanded)
 	default:
+		switch row.Name {
+		case "skills_list":
+			return renderSkillsListBlock(styles, row, expanded)
+		case "skill_view":
+			return renderSkillViewBlock(styles, row, expanded)
+		case "skill_manage":
+			return renderSkillManageBlock(styles, row, expanded)
+		}
 		return []string{renderGenericLine(styles, row)}
 	}
 }
@@ -568,6 +595,108 @@ func renderGenericLine(styles Styles, row toolRow) string {
 		return header + " " + styles.ToolPending.Render("…")
 	}
 	return header
+}
+
+func renderSkillsListBlock(styles Styles, row toolRow, expanded bool) []string {
+	header := styles.ToolBullet.Render("●") + " " +
+		styles.ToolAction.Render("skills_list")
+	if row.Target != "all categories" {
+		header += " " + styles.ToolTarget.Render(row.Target)
+	}
+	lines := []string{header}
+
+	if row.Pending {
+		lines = append(lines, styles.ToolSub.Render("└ …"))
+		return lines
+	}
+
+	if row.Error {
+		lines = append(lines, styles.AssistError.Render("└ failed"))
+		return lines
+	}
+
+	var result struct {
+		Count int `json:"count"`
+	}
+	if err := json.Unmarshal([]byte(row.Output), &result); err == nil {
+		lines = append(lines, styles.ToolSub.Render(fmt.Sprintf("└ %d skills", result.Count)))
+	} else {
+		lines = append(lines, styles.ToolSub.Render("└ completed"))
+	}
+	return lines
+}
+
+func renderSkillViewBlock(styles Styles, row toolRow, expanded bool) []string {
+	header := styles.ToolBullet.Render("●") + " " +
+		styles.ToolAction.Render("skill_view") + " " +
+		styles.ToolTarget.Render(row.Target)
+	lines := []string{header}
+
+	if row.Pending {
+		lines = append(lines, styles.ToolSub.Render("└ …"))
+		return lines
+	}
+
+	if row.Error {
+		lines = append(lines, styles.AssistError.Render("└ failed"))
+		return lines
+	}
+
+	var result struct {
+		Name string `json:"name"`
+		File string `json:"file"`
+	}
+	if err := json.Unmarshal([]byte(row.Output), &result); err == nil {
+		if result.File != "" {
+			lines = append(lines, styles.ToolSub.Render(fmt.Sprintf("└ loaded skill '%s' file '%s'", result.Name, result.File)))
+		} else {
+			lines = append(lines, styles.ToolSub.Render(fmt.Sprintf("└ loaded skill '%s'", result.Name)))
+		}
+	} else {
+		lines = append(lines, styles.ToolSub.Render("└ completed"))
+	}
+	return lines
+}
+
+func renderSkillManageBlock(styles Styles, row toolRow, expanded bool) []string {
+	header := styles.ToolBullet.Render("●") + " " +
+		styles.ToolAction.Render("skill_manage") + " " +
+		styles.ToolTarget.Render(row.Target)
+	lines := []string{header}
+
+	if row.Pending {
+		lines = append(lines, styles.ToolSub.Render("└ …"))
+		return lines
+	}
+
+	if row.Error {
+		lines = append(lines, styles.AssistError.Render("└ failed"))
+		return lines
+	}
+
+	var result struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(row.Output), &result); err == nil {
+		if result.Success {
+			msg := result.Message
+			if msg == "" {
+				msg = "success"
+			}
+			lines = append(lines, styles.ToolSub.Render("└ "+msg))
+		} else {
+			errMsg := result.Error
+			if errMsg == "" {
+				errMsg = "failed"
+			}
+			lines = append(lines, styles.AssistError.Render("└ "+errMsg))
+		}
+	} else {
+		lines = append(lines, styles.ToolSub.Render("└ completed"))
+	}
+	return lines
 }
 
 func formatToolCall(name, argsJSON string) string {

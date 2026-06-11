@@ -3,10 +3,12 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/enough/enough/backend/opencode"
 )
@@ -51,17 +53,29 @@ func (a *Agent) toolBash(ctx context.Context, id, argsJSON string) toolResult {
 	cmd.Stdout = sw
 	cmd.Stderr = sw
 
+	started := time.Now()
 	err := cmd.Run()
+	duration := time.Since(started)
 	text := sw.String()
 
 	// Interrupted: report whatever was captured plus a clear marker rather than
-	// a raw "signal: killed" error.
+	// a raw "signal: killed" error. No evidence — an interrupted run proves nothing.
 	if ctx.Err() != nil {
 		if text != "" && !strings.HasSuffix(text, "\n") {
 			text += "\n"
 		}
 		return toolResult{output: text + "[interrupted]", isErr: true}
 	}
+
+	exitCode := 0
+	if err != nil {
+		exitCode = -1
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			exitCode = ee.ExitCode()
+		}
+	}
+	a.recordCommandRun(args.Command, exitCode, text, duration)
 
 	if err != nil {
 		return toolResult{output: fmt.Sprintf("%v\n%s", err, text), isErr: true}

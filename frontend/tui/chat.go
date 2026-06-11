@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/enough/enough/frontend/tui/highlight"
+	"github.com/enough/enough/frontend/tui/term"
 )
 
 type chatMsg struct {
@@ -96,6 +97,26 @@ func renderBranchSummary(styles Styles, msg chatMsg, width int, expanded bool) s
 	}
 
 	text := "Branch summary (ctrl+o to expand)"
+	return label + " " + styles.LogDim.Render(text)
+}
+
+func renderSkillSummary(styles Styles, msg chatMsg, width int, expanded bool) string {
+	label := styles.LogAccent.Render("[skill]")
+
+	if expanded {
+		header := fmt.Sprintf("**Skill: %s**", msg.toolName)
+		if strings.TrimSpace(msg.toolArgs) != "" {
+			header += fmt.Sprintf("\n\n**Args:** %s", strings.TrimSpace(msg.toolArgs))
+		}
+		content := header + "\n\n" + msg.text
+		return label + "\n" + wrapText(content, width)
+	}
+
+	text := fmt.Sprintf("loaded skill '%s'", msg.toolName)
+	if strings.TrimSpace(msg.toolArgs) != "" {
+		text += fmt.Sprintf(" — %s", term.TruncateWidth(strings.TrimSpace(msg.toolArgs), 40))
+	}
+	text += " (ctrl+o to expand)"
 	return label + " " + styles.LogDim.Render(text)
 }
 
@@ -217,6 +238,11 @@ func chatBlockSpecs(styles Styles, messages []chatMsg, width int, hideThinking, 
 			m := msg
 			add("branchSummary", hashMsg(seed, m), func() string {
 				return renderBranchSummary(styles, m, contentW, expandTools)
+			})
+		case "skillSummary":
+			m := msg
+			add("skillSummary", hashMsg(seed, m), func() string {
+				return renderSkillSummary(styles, m, contentW, expandTools)
 			})
 		case "error":
 			m := msg
