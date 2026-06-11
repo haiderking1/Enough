@@ -513,22 +513,26 @@ func (a *Agent) runWorkerLoop(ctx context.Context, prompt string, maxTurns int) 
 		}
 
 		// Pure delegation turn: the worker only nested a swarm. Don't round-trip
-		// through the model again — real models often return empty or a useless
-		// one-liner instead of echoing the child's payload, which breaks deep
-		// nesting (~75% failure at 4+ levels in manual testing).
-		if onlySwarm {
-			if payload := extractSwarmPayload(swarmResult.output); payload != "" {
-				return payload, turns, "ok", ""
-			}
-			if strings.TrimSpace(swarmResult.output) != "" && !swarmResult.isErr {
-				return strings.TrimSpace(swarmResult.output), turns, "ok", ""
+		// through the model again for a single child — real models often return
+		// empty or a useless one-liner instead of echoing the child's payload,
+		// which breaks deep nesting. Multi-child swarms must go through the
+		// final model turn so the parent can combine/summarize all children.
+		if onlySwarm && swarmWorkerSectionCount(swarmResult.output) <= 1 {
+			if output := resolveSwarmReturnOutput(swarmResult.output); output != "" {
+				if !swarmResult.isErr {
+					return output, turns, "ok", ""
+				}
+				if payload := extractSwarmPayload(swarmResult.output); payload != "" {
+					return payload, turns, "ok", ""
+				}
 			}
 			if swarmResult.isErr {
 				return "", turns, "error", strings.TrimSpace(swarmResult.output)
 			}
 		}
-		if payload := extractSwarmPayload(lastSwarmOutput); payload != "" {
-			return payload, turns, "ok", ""
+		if lastSwarmOutput != "" && swarmWorkerSectionCount(lastSwarmOutput) <= 1 {
+			output := resolveSwarmReturnOutput(lastSwarmOutput)
+			return output, turns, "ok", ""
 		}
 	}
 }
@@ -557,10 +561,7 @@ func resolveWorkerOutput(finalText, lastSwarmOutput string) string {
 	if trimmed := strings.TrimSpace(finalText); trimmed != "" && !isSwarmStubText(trimmed) {
 		return trimmed
 	}
-	if payload := extractSwarmPayload(lastSwarmOutput); payload != "" {
-		return payload
-	}
-	return strings.TrimSpace(lastSwarmOutput)
+	return resolveSwarmReturnOutput(lastSwarmOutput)
 }
 
 func isSwarmStubText(s string) bool {
@@ -576,6 +577,23 @@ func isSwarmStubText(s string) bool {
 }
 
 var swarmSectionHeader = regexp.MustCompile(`(?m)^##\s+(.+?)\s+\[(ok|error|aborted)\]\s*(?:\([^)]+\))?.*$`)
+
+func resolveSwarmReturnOutput(output string) string {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" {
+		return ""
+	}
+	if swarmWorkerSectionCount(output) == 1 {
+		if payload := extractSwarmPayload(output); payload != "" {
+			return payload
+		}
+	}
+	return trimmed
+}
+
+func swarmWorkerSectionCount(output string) int {
+	return len(swarmSectionHeader.FindAllStringIndex(output, -1))
+}
 
 func extractSwarmPayload(output string) string {
 	if !swarmSectionHeader.MatchString(output) {

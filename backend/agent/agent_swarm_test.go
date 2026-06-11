@@ -111,16 +111,26 @@ func TestToolGlobAndGrep(t *testing.T) {
 
 func TestResolveWorkerOutput(t *testing.T) {
 	nested := "Ran 1 agent(s) at concurrency 1 — 1 ok.\n\n## child [ok] (1 turn)\nPAYLOAD:deep"
+	parallel := strings.Join([]string{
+		"Ran 2 agent(s) at concurrency 2 — 2 ok.",
+		"",
+		"## a [ok] (1 turn)",
+		"PAYLOAD:a",
+		"## b [ok] (1 turn)",
+		"PAYLOAD:b",
+	}, "\n")
 	cases := map[string]struct {
 		finalText string
 		swarmOut  string
 		want      string
 	}{
-		"final text wins":           {"summary here", "PAYLOAD:deep", "summary here"},
-		"empty falls back to swarm": {"   ", nested, "PAYLOAD:deep"},
-		"stub falls back to swarm":  {"Task complete.", nested, "PAYLOAD:deep"},
-		"both empty":                {"", "", ""},
-		"stub final trims swarm":     {"  done  ", "PAYLOAD:deep", "PAYLOAD:deep"},
+		"final text wins":                   {"summary here", "PAYLOAD:deep", "summary here"},
+		"empty falls back to swarm":         {"   ", nested, "PAYLOAD:deep"},
+		"stub falls back to swarm":          {"Task complete.", nested, "PAYLOAD:deep"},
+		"stub keeps parallel aggregate":     {"Done.", parallel, parallel},
+		"empty keeps parallel aggregate":    {"", parallel, parallel},
+		"both empty":                        {"", "", ""},
+		"stub final trims plain swarm text": {"  done  ", "PAYLOAD:deep", "PAYLOAD:deep"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -128,6 +138,25 @@ func TestResolveWorkerOutput(t *testing.T) {
 				t.Fatalf("resolveWorkerOutput(%q, %q) = %q, want %q", tc.finalText, tc.swarmOut, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestResolveSwarmReturnOutputCollapsesOnlySingleWorker(t *testing.T) {
+	single := "Ran 1 agent(s) at concurrency 1 — 1 ok.\n\n## child [ok] (1 turn)\nPAYLOAD:one"
+	multi := strings.Join([]string{
+		"Ran 2 agent(s) at concurrency 2 — 2 ok.",
+		"",
+		"## first [ok] (1 turn)",
+		"PAYLOAD:first",
+		"",
+		"## second [ok] (1 turn)",
+		"PAYLOAD:second",
+	}, "\n")
+	if got := resolveSwarmReturnOutput(single); got != "PAYLOAD:one" {
+		t.Fatalf("single worker should collapse to payload, got %q", got)
+	}
+	if got := resolveSwarmReturnOutput(multi); got != multi {
+		t.Fatalf("multi-worker swarm should preserve aggregate:\n%s", got)
 	}
 }
 
@@ -261,6 +290,11 @@ func TestNestedSwarmPayloadSurvivesAbortedSibling(t *testing.T) {
 			fmt.Fprint(w, "data: [DONE]\n\n")
 			return
 		}
+		if last.Role == "tool" {
+			writeChunk(streamChunkJSON("Task complete.", nil))
+			fmt.Fprint(w, "data: [DONE]\n\n")
+			return
+		}
 		args := `{"tasks":[{"id":"payload","prompt":"PAYLOAD-WORKER"},{"id":"a","prompt":"blocked","depends_on":["b"]},{"id":"b","prompt":"blocked","depends_on":["a"]}],"max_concurrency":1}`
 		writeChunk(streamChunkJSON("", []toolCallJSON{{
 			Index: 0, ID: "call-swarm", Type: "function",
@@ -278,6 +312,68 @@ func TestNestedSwarmPayloadSurvivesAbortedSibling(t *testing.T) {
 	res := a.toolAgentSwarm(context.Background(), "outer", `{"tasks":[{"id":"root","prompt":"ROOT"}]}`, 0)
 	if !strings.Contains(res.output, payload) {
 		t.Fatalf("payload from ok sibling was lost:\n%s", res.output)
+	}
+}
+
+func TestNestedSwarmMultiChildAllowsFinalModelProcessing(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req opencode.ChatRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		last := req.Messages[len(req.Messages)-1]
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		writeChunk := func(v any) {
+			b, _ := json.Marshal(v)
+			fmt.Fprintf(w, "data: %s\n\n", b)
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+
+		if last.Role == "tool" {
+			text := opencode.ContentString(last)
+			if strings.Contains(text, "PAYLOAD:a") && strings.Contains(text, "PAYLOAD:b") {
+				writeChunk(streamChunkJSON("COMBINED: PAYLOAD:a, PAYLOAD:b", nil))
+			} else {
+				writeChunk(streamChunkJSON("missing payload", nil))
+			}
+			fmt.Fprint(w, "data: [DONE]\n\n")
+			return
+		}
+
+		switch text := opencode.ContentString(last); {
+		case strings.Contains(text, "ROOT"):
+			args := `{"tasks":[{"id":"a","prompt":"CHILD_A"},{"id":"b","prompt":"CHILD_B"}],"max_concurrency":2}`
+			writeChunk(streamChunkJSON("", []toolCallJSON{{
+				Index:    0,
+				ID:       "call-swarm",
+				Type:     "function",
+				Function: toolFnJSON{Name: "agent_swarm", Arguments: args},
+			}}))
+		case strings.Contains(text, "CHILD_A"):
+			writeChunk(streamChunkJSON("PAYLOAD:a", nil))
+		case strings.Contains(text, "CHILD_B"):
+			writeChunk(streamChunkJSON("PAYLOAD:b", nil))
+		default:
+			writeChunk(streamChunkJSON("", nil))
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	a := &Agent{
+		cfg:     config.Runtime{Model: "test-model"},
+		client:  opencode.NewClient(srv.URL, "test-key", "test-model"),
+		workDir: t.TempDir(),
+	}
+	res := a.toolAgentSwarm(context.Background(), "outer", `{"tasks":[{"id":"root","prompt":"ROOT"}]}`, 0)
+	if !strings.Contains(res.output, "COMBINED: PAYLOAD:a, PAYLOAD:b") {
+		t.Fatalf("parent did not process parallel child output:\n%s", res.output)
 	}
 }
 
