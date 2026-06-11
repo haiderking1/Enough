@@ -162,7 +162,7 @@ func hashMsg(h uint64, m chatMsg) uint64 {
 // chatBlockSpecs groups messages into blocks (matching renderChat's grouping)
 // without rendering them. width/hideThinking/expandTools are folded into each
 // fp so a change in those invalidates every block.
-func chatBlockSpecs(styles Styles, messages []chatMsg, width int, hideThinking, expandTools bool) []chatBlockSpec {
+func chatBlockSpecs(styles Styles, messages []chatMsg, width int, hideThinking, expandTools bool, toolSpinnerFrame int) []chatBlockSpec {
 	contentW := width - 2
 	var specs []chatBlockSpec
 
@@ -201,8 +201,12 @@ func chatBlockSpecs(styles Styles, messages []chatMsg, width int, hideThinking, 
 			for _, t := range g {
 				fp = hashMsg(fp, t)
 			}
+			if toolGroupAnimates(g) {
+				fp = fnvInt(fp, toolSpinnerFrame)
+			}
+			frame := toolSpinnerFrame
 			add("tool", fp, func() string {
-				return renderToolGroup(styles, g, contentW, expandTools)
+				return renderToolGroup(styles, g, contentW, expandTools, frame)
 			})
 		case "compactionSummary":
 			m := msg
@@ -239,7 +243,7 @@ func renderChat(styles Styles, messages []chatMsg, width int, hideThinking, expa
 		width = 80
 	}
 
-	specs := chatBlockSpecs(styles, messages, width, hideThinking, expandTools)
+	specs := chatBlockSpecs(styles, messages, width, hideThinking, expandTools, 0)
 	var blocks []string
 	var roles []string
 	for _, spec := range specs {

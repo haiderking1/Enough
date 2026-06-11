@@ -3,11 +3,12 @@ package tui
 import "strings"
 
 type chatRenderCache struct {
-	revision      uint64
-	width         int
-	hideThinking  bool
-	toolsExpanded bool
-	lines         []string
+	revision         uint64
+	width            int
+	hideThinking     bool
+	toolsExpanded    bool
+	toolSpinnerFrame int
+	lines            []string
 }
 
 // chatBlockCache holds per-block rendered output so that a change to one
@@ -36,6 +37,7 @@ func (a *App) chatLines(width int) []string {
 		c.width == width &&
 		c.hideThinking == a.hideThinking &&
 		c.toolsExpanded == a.toolsExpanded &&
+		c.toolSpinnerFrame == a.toolSpinnerFrame &&
 		c.lines != nil {
 		return c.lines
 	}
@@ -45,6 +47,7 @@ func (a *App) chatLines(width int) []string {
 	c.width = width
 	c.hideThinking = a.hideThinking
 	c.toolsExpanded = a.toolsExpanded
+	c.toolSpinnerFrame = a.toolSpinnerFrame
 	return c.lines
 }
 
@@ -56,7 +59,7 @@ func (a *App) renderChatIncremental(width int) []string {
 		width = 80
 	}
 
-	specs := chatBlockSpecs(a.styles, a.messages, width, a.hideThinking, a.toolsExpanded)
+	specs := chatBlockSpecs(a.styles, a.messages, width, a.hideThinking, a.toolsExpanded, a.toolSpinnerFrame)
 	bc := &a.chatBlocks
 
 	n := len(specs)

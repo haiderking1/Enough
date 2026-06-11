@@ -2,7 +2,9 @@ package agent
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/enough/enough/backend/opencode"
 )
@@ -44,8 +46,21 @@ func (a *Agent) toolReadFile(argsJSON string) toolResult {
 
 	const max = 64_000
 	out := string(data)
+	truncated := false
 	if len(out) > max {
-		out = out[:max] + "\n... truncated ..."
+		out = out[:max]
+		truncated = true
 	}
-	return toolResult{output: out}
+
+	// Header carries the line count so callers never need an external `wc -l`.
+	// Counting on the full data, not the truncated view, keeps the total accurate.
+	lines := strings.Count(string(data), "\n")
+	if len(data) > 0 && !strings.HasSuffix(string(data), "\n") {
+		lines++ // final line without a trailing newline still counts
+	}
+	header := fmt.Sprintf("Read %d lines from %s\n", lines, path)
+	if truncated {
+		out += "\n... truncated ..."
+	}
+	return toolResult{output: header + out}
 }

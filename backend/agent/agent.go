@@ -29,6 +29,9 @@ type Agent struct {
 	busy     bool
 	cancel   context.CancelFunc
 
+	// swarmDepth tracks nested agent_swarm nesting (0 = main agent).
+	swarmDepth int
+
 	compactionCancel          context.CancelFunc
 	overflowRecoveryAttempted bool
 }
@@ -245,6 +248,7 @@ func (a *Agent) runLoop(ctx context.Context) error {
 		} else {
 			messages = append([]opencode.Message(nil), a.messages...)
 		}
+		cfg := a.cfg
 		a.mu.Unlock()
 
 		streamStarted := false
@@ -257,11 +261,11 @@ func (a *Agent) runLoop(ctx context.Context) error {
 		}
 
 		req := opencode.ChatRequest{
-			Model:    a.cfg.Model,
+			Model:    cfg.Model,
 			Messages: messages,
 			Tools:    tools,
 		}
-		opencode.ApplyThinkingToRequest(&req, opencode.ParseThinkingLevel(a.cfg.ThinkingLevel), a.cfg.Model)
+		opencode.ApplyThinkingToRequest(&req, opencode.ParseThinkingLevel(cfg.ThinkingLevel), cfg.Model)
 
 		resp, err := a.client.ChatStream(ctx, req, opencode.StreamCallbacks{
 			OnThinking: func(delta string) {
@@ -500,11 +504,4 @@ func (a *Agent) err(text string) {
 	if a.emit != nil {
 		a.emit(core.Event{Kind: core.EventError, Data: text})
 	}
-}
-
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "..."
 }

@@ -13,15 +13,19 @@ import (
 type toolKind string
 
 const (
-	toolKindWrite toolKind = "write"
-	toolKindEdit  toolKind = "edit"
-	toolKindRead  toolKind = "read"
-	toolKindBash  toolKind = "bash"
-	toolKindOther toolKind = "other"
+	toolKindWrite  toolKind = "write"
+	toolKindEdit   toolKind = "edit"
+	toolKindRead   toolKind = "read"
+	toolKindBash   toolKind = "bash"
+	toolKindSwarm  toolKind = "swarm"
+	toolKindWeb    toolKind = "web"
+	toolKindOther  toolKind = "other"
 )
 
 type toolRow struct {
 	Kind    toolKind
+	Name    string
+	Args    string
 	Action  string
 	Target  string
 	Added   int
@@ -42,6 +46,8 @@ func parseToolRow(msg chatMsg) toolRow {
 	_ = json.Unmarshal([]byte(msg.toolArgs), &args)
 
 	row := toolRow{
+		Name:    name,
+		Args:    msg.toolArgs,
 		Pending: msg.toolPending,
 		Error:   msg.toolError,
 		Output:  strings.TrimSpace(msg.toolResult),
@@ -81,15 +87,29 @@ func parseToolRow(msg chatMsg) toolRow {
 		row.Action = "Bash"
 		row.Target = oneLine(jsonString(args["command"]))
 	case "web_search":
-		row.Kind = toolKindOther
-		row.Action = "Web"
-		row.Target = truncateMiddle(oneLine(jsonString(args["query"])), 56)
+		row.Kind = toolKindWeb
+		row.Action = "Search"
+		row.Target = oneLine(jsonString(args["query"]))
 	case "list_dir":
 		row.Kind = toolKindOther
 		row.Action = "List"
 		row.Target = displayPath(jsonString(args["path"]))
 		if row.Target == "" {
 			row.Target = "."
+		}
+	case "glob":
+		row.Kind = toolKindOther
+		row.Action = "Glob"
+		row.Target = oneLine(jsonString(args["pattern"]))
+	case "grep":
+		row.Kind = toolKindOther
+		row.Action = "Grep"
+		row.Target = truncateMiddle(oneLine(jsonString(args["pattern"])), 56)
+	case "agent_swarm":
+		row.Kind = toolKindSwarm
+		row.Action = "Spawned"
+		if goal := jsonString(args["goal"]); goal != "" {
+			row.Target = oneLine(goal)
 		}
 	default:
 		row.Kind = toolKindOther
@@ -142,6 +162,184 @@ func displayPathFull(path string) string {
 	return path
 }
 
+type swarmTaskArg struct {
+	ID     string `json:"id"`
+	Prompt string `json:"prompt"`
+}
+
+func parseAgentSwarmArgs(argsJSON string) (goal, sharedContext string, tasks []swarmTaskArg) {
+	if argsJSON == "" {
+		return "", "", nil
+	}
+	var raw struct {
+		Goal          string `json:"goal"`
+		SharedContext string `json:"shared_context"`
+		Tasks         []swarmTaskArg `json:"tasks"`
+	}
+	if json.Unmarshal([]byte(argsJSON), &raw) != nil {
+		return "", "", nil
+	}
+	for _, t := range raw.Tasks {
+		if strings.TrimSpace(t.Prompt) == "" {
+			continue
+		}
+		tasks = append(tasks, swarmTaskArg{
+			ID:     strings.TrimSpace(t.ID),
+			Prompt: strings.TrimSpace(t.Prompt),
+		})
+	}
+	return strings.TrimSpace(raw.Goal), strings.TrimSpace(raw.SharedContext), tasks
+}
+
+func swarmAgentLabel(task swarmTaskArg, index int) string {
+	if task.ID != "" {
+		return task.ID
+	}
+	return fmt.Sprintf("agent-%d", index+1)
+}
+
+func renderSpawnHeader(styles Styles, id, role, status string, animating bool, spinnerFrame int) string {
+	rolePart := ""
+	if role != "" {
+		rolePart = " " + styles.ToolMuted.Render("["+role+"]")
+	}
+	statusPart := ""
+	if status != "" && !animating {
+		statusPart = " " + styles.ToolMuted.Render("("+status+")")
+	}
+	return spawnBullet(styles, animating, spinnerFrame) + " " +
+		styles.ToolAction.Render("Spawned") + " " +
+		styles.LogAccent.Render(id) + rolePart + statusPart
+}
+
+func parseSwarmWorkerStatus(output string) map[string]string {
+	status := make(map[string]string)
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "## ") {
+			continue
+		}
+		rest := strings.TrimPrefix(line, "## ")
+		id, rest, ok := strings.Cut(rest, " [")
+		if !ok {
+			continue
+		}
+		st, _, ok := strings.Cut(rest, "]")
+		if !ok {
+			continue
+		}
+		status[strings.TrimSpace(id)] = strings.TrimSpace(st)
+	}
+	return status
+}
+
+func renderAgentSwarmBlock(styles Styles, row toolRow, width int, expanded bool, spinnerFrame int) []string {
+	goal, sharedContext, tasks := parseAgentSwarmArgs(row.Args)
+	statusByID := parseSwarmWorkerStatus(row.Output)
+	indent := "  "
+	ctxIndent := "    "
+
+	var lines []string
+
+	renderOne := func(id, role, prompt, st string, animating bool) {
+		lines = append(lines, renderSpawnHeader(styles, id, role, st, animating, spinnerFrame))
+		taskLine := indent + "└ " + term.TruncateWidth(oneLine(prompt), width-4)
+		lines = append(lines, styles.ToolSub.Render(taskLine))
+		if sharedContext != "" {
+			lines = append(lines, styles.ToolSub.Render(ctxIndent+"Context:"))
+			ctx := sharedContext
+			if !expanded {
+				ctx = term.TruncateWidth(oneLine(ctx), width-6)
+			}
+			lines = append(lines, styles.ToolOutput.Render(ctxIndent+"- "+ctx))
+		}
+	}
+
+	switch {
+	case len(tasks) > 0:
+		for i, task := range tasks {
+			id := swarmAgentLabel(task, i)
+			st := statusByID[id]
+			if row.Pending && st == "" {
+				st = "running…"
+			}
+			animating := row.Pending && (st == "" || st == "running…" || st == "planning…")
+			renderOne(id, "worker", task.Prompt, st, animating)
+		}
+	case goal != "":
+		st := ""
+		animating := row.Pending
+		if row.Pending {
+			st = "planning…"
+		} else if row.Output != "" {
+			st = "done"
+		}
+		renderOne("swarm", "planner", goal, st, animating)
+	default:
+		lines = append(lines, renderSpawnHeader(styles, "swarm", "worker", "", row.Pending, spinnerFrame))
+		lines = append(lines, styles.ToolSub.Render(indent+"└ agents"))
+	}
+
+	if row.Pending && row.Output != "" {
+		progress := strings.TrimSpace(strings.Split(row.Output, "\n")[0])
+		if progress != "" {
+			lines = append(lines, styles.ToolPending.Render(ctxIndent+progress))
+		}
+	}
+
+	if row.Error {
+		lines = append(lines, styles.AssistError.Render(ctxIndent+"failed"))
+	}
+
+	return lines
+}
+
+func renderWebSearchBlock(styles Styles, row toolRow, width int, expanded bool) []string {
+	query := row.Target
+	if query == "" {
+		query = "query"
+	}
+	header := styles.AssistBullet.Render("*") + " " +
+		styles.ToolAction.Render("Search") + " " +
+		styles.LogAccent.Render(term.TruncateWidth(query, width-12))
+
+	lines := []string{header}
+	taskLine := "  └ " + term.TruncateWidth(oneLine(query), width-4)
+	lines = append(lines, styles.ToolSub.Render(taskLine))
+
+	if row.Pending {
+		lines = append(lines, styles.ToolPending.Render("    searching…"))
+		return lines
+	}
+
+	out := strings.TrimSpace(row.Output)
+	if out == "" {
+		return lines
+	}
+
+	if !row.Error {
+		if n := strings.Count(out, "\n\n"); n > 0 {
+			lines = append(lines, styles.ToolMuted.Render(fmt.Sprintf("    %d results", n+1)))
+		}
+	}
+
+	if expanded {
+		detail := limitToolOutput(out, true)
+		for i, line := range strings.Split(detail, "\n") {
+			if line == "" {
+				continue
+			}
+			prefix := "    "
+			if i == 0 {
+				prefix = "    "
+			}
+			lines = append(lines, styles.ToolOutput.Render(prefix+line))
+		}
+	}
+
+	return lines
+}
+
 func toolActionLabel(name string) string {
 	parts := strings.Fields(strings.ReplaceAll(name, "_", " "))
 	for i, p := range parts {
@@ -160,7 +358,7 @@ func countLines(s string) int {
 	return len(strings.Split(strings.TrimRight(s, "\n"), "\n"))
 }
 
-func renderToolGroup(styles Styles, tools []chatMsg, width int, expanded bool) string {
+func renderToolGroup(styles Styles, tools []chatMsg, width int, expanded bool, spinnerFrame int) string {
 	if len(tools) == 0 {
 		return ""
 	}
@@ -179,9 +377,10 @@ func renderToolGroup(styles Styles, tools []chatMsg, width int, expanded bool) s
 
 	for i, msg := range tools {
 		row := rows[i]
-		lines = append(lines, renderToolBlock(styles, row, width, expanded)...)
+		lines = append(lines, renderToolBlock(styles, row, width, expanded, spinnerFrame)...)
 
-		if expanded && row.Output != "" && !row.Pending && row.Kind != toolKindBash {
+		if expanded && row.Output != "" && !row.Pending &&
+			row.Kind != toolKindBash && row.Kind != toolKindSwarm && row.Kind != toolKindWeb {
 			detail := limitToolOutput(row.Output, true)
 			outStyle := styles.ToolOutput
 			if row.Error {
@@ -201,7 +400,7 @@ func renderToolGroup(styles Styles, tools []chatMsg, width int, expanded bool) s
 	return strings.Join(lines, "\n")
 }
 
-func renderToolBlock(styles Styles, row toolRow, width int, expanded bool) []string {
+func renderToolBlock(styles Styles, row toolRow, width int, expanded bool, spinnerFrame int) []string {
 	switch row.Kind {
 	case toolKindWrite:
 		return []string{renderWriteLine(styles, row)}
@@ -211,6 +410,10 @@ func renderToolBlock(styles Styles, row toolRow, width int, expanded bool) []str
 		return renderReadBlock(styles, row)
 	case toolKindBash:
 		return renderBashBlock(styles, row, width, expanded)
+	case toolKindSwarm:
+		return renderAgentSwarmBlock(styles, row, width, expanded, spinnerFrame)
+	case toolKindWeb:
+		return renderWebSearchBlock(styles, row, width, expanded)
 	default:
 		return []string{renderGenericLine(styles, row)}
 	}

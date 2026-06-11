@@ -47,6 +47,7 @@ type App struct {
 	compacting                 bool
 	compactionLabel            string
 	compactionFrame            int
+	toolSpinnerFrame           int
 	compactionQueuedMessages   []string
 	agentCh                    <-chan core.Event
 	agent                      *agent.Agent
@@ -190,8 +191,12 @@ func (a *App) run() error {
 			if compacting {
 				a.compactionFrame++
 			}
+			animatingTools := a.hasAnimatingTools()
+			if animatingTools {
+				a.toolSpinnerFrame++
+			}
 			a.mu.Unlock()
-			if compacting {
+			if compacting || animatingTools {
 				a.requestRender()
 			}
 		}
