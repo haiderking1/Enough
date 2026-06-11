@@ -85,6 +85,45 @@ func TestRenderAgentSwarmBlockShowsStatusWhenDone(t *testing.T) {
 	}
 }
 
+func TestRenderAgentSwarmBlockShowsAbortedStatus(t *testing.T) {
+	styles := NewStyles()
+	lines := renderAgentSwarmBlock(styles, toolRow{
+		Kind:   toolKindSwarm,
+		Args:   `{"tasks":[{"id":"a","prompt":"do thing"}]}`,
+		Output: "## a [aborted] (1 turn)\nError: user aborted",
+	}, 100, false, 0)
+	plain := ansi.Strip(strings.Join(lines, "\n"))
+	if !strings.Contains(plain, "(aborted)") {
+		t.Fatalf("expected aborted status: %q", plain)
+	}
+}
+
+func TestRenderAgentSwarmBlockShowsRetryCount(t *testing.T) {
+	styles := NewStyles()
+	lines := renderAgentSwarmBlock(styles, toolRow{
+		Kind:   toolKindSwarm,
+		Args:   `{"tasks":[{"id":"a","prompt":"do thing"}]}`,
+		Output: "## a [ok] (2 turns ×3)\ndone",
+	}, 100, false, 0)
+	plain := ansi.Strip(strings.Join(lines, "\n"))
+	if !strings.Contains(plain, "×3") {
+		t.Fatalf("expected retry count: %q", plain)
+	}
+}
+
+func TestRenderAgentSwarmBlockShowsErrorWhenExpanded(t *testing.T) {
+	styles := NewStyles()
+	lines := renderAgentSwarmBlock(styles, toolRow{
+		Kind:   toolKindSwarm,
+		Args:   `{"tasks":[{"id":"a","prompt":"do thing"}]}`,
+		Output: "## a [error] (1 turn)\nError: boom",
+	}, 100, true, 0)
+	plain := ansi.Strip(strings.Join(lines, "\n"))
+	if !strings.Contains(plain, "Error: boom") {
+		t.Fatalf("expected expanded error detail: %q", plain)
+	}
+}
+
 func TestSingleSwarmNoGroupHeader(t *testing.T) {
 	styles := NewStyles()
 	out := renderToolGroup(styles, []chatMsg{{

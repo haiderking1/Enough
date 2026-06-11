@@ -13,13 +13,13 @@ import (
 type toolKind string
 
 const (
-	toolKindWrite  toolKind = "write"
-	toolKindEdit   toolKind = "edit"
-	toolKindRead   toolKind = "read"
-	toolKindBash   toolKind = "bash"
-	toolKindSwarm  toolKind = "swarm"
-	toolKindWeb    toolKind = "web"
-	toolKindOther  toolKind = "other"
+	toolKindWrite toolKind = "write"
+	toolKindEdit  toolKind = "edit"
+	toolKindRead  toolKind = "read"
+	toolKindBash  toolKind = "bash"
+	toolKindSwarm toolKind = "swarm"
+	toolKindWeb   toolKind = "web"
+	toolKindOther toolKind = "other"
 )
 
 type toolRow struct {
@@ -172,8 +172,8 @@ func parseAgentSwarmArgs(argsJSON string) (goal, sharedContext string, tasks []s
 		return "", "", nil
 	}
 	var raw struct {
-		Goal          string `json:"goal"`
-		SharedContext string `json:"shared_context"`
+		Goal          string         `json:"goal"`
+		SharedContext string         `json:"shared_context"`
 		Tasks         []swarmTaskArg `json:"tasks"`
 	}
 	if json.Unmarshal([]byte(argsJSON), &raw) != nil {
@@ -198,25 +198,49 @@ func swarmAgentLabel(task swarmTaskArg, index int) string {
 	return fmt.Sprintf("agent-%d", index+1)
 }
 
-func renderSpawnHeader(styles Styles, id, role, status string, animating bool, spinnerFrame int) string {
+func renderSpawnHeader(styles Styles, id, role, status string, attempts int, animating bool, spinnerFrame int) string {
 	rolePart := ""
 	if role != "" {
 		rolePart = " " + styles.ToolMuted.Render("["+role+"]")
 	}
 	statusPart := ""
 	if status != "" && !animating {
-		statusPart = " " + styles.ToolMuted.Render("("+status+")")
+		statusText := "(" + status + ")"
+		switch status {
+		case "error", "aborted":
+			statusPart = " " + styles.AssistError.Render(statusText)
+		case "ok":
+			statusPart = " " + styles.LogOk.Render(statusText)
+		default:
+			statusPart = " " + styles.ToolMuted.Render(statusText)
+		}
+	}
+	retryPart := ""
+	if attempts > 1 && !animating {
+		retryPart = " " + styles.ToolMuted.Render(fmt.Sprintf("×%d", attempts))
 	}
 	return spawnBullet(styles, animating, spinnerFrame) + " " +
 		styles.ToolAction.Render("Spawned") + " " +
-		styles.LogAccent.Render(id) + rolePart + statusPart
+		styles.LogAccent.Render(id) + rolePart + statusPart + retryPart
 }
 
-func parseSwarmWorkerStatus(output string) map[string]string {
-	status := make(map[string]string)
+type swarmWorkerInfo struct {
+	Status   string
+	Attempts int
+	Error    string
+}
+
+func parseSwarmWorkerInfo(output string) map[string]swarmWorkerInfo {
+	info := make(map[string]swarmWorkerInfo)
+	var current string
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "## ") {
+			if current != "" && strings.HasPrefix(line, "Error:") {
+				entry := info[current]
+				entry.Error = strings.TrimSpace(strings.TrimPrefix(line, "Error:"))
+				info[current] = entry
+			}
 			continue
 		}
 		rest := strings.TrimPrefix(line, "## ")
@@ -228,23 +252,40 @@ func parseSwarmWorkerStatus(output string) map[string]string {
 		if !ok {
 			continue
 		}
-		status[strings.TrimSpace(id)] = strings.TrimSpace(st)
+		current = strings.TrimSpace(id)
+		entry := swarmWorkerInfo{Status: strings.TrimSpace(st), Attempts: 1}
+		if ix := strings.Index(rest, "×"); ix >= 0 {
+			n := 0
+			for _, r := range rest[ix+len("×"):] {
+				if r < '0' || r > '9' {
+					break
+				}
+				n = n*10 + int(r-'0')
+			}
+			if n > 1 {
+				entry.Attempts = n
+			}
+		}
+		info[current] = entry
 	}
-	return status
+	return info
 }
 
 func renderAgentSwarmBlock(styles Styles, row toolRow, width int, expanded bool, spinnerFrame int) []string {
 	goal, sharedContext, tasks := parseAgentSwarmArgs(row.Args)
-	statusByID := parseSwarmWorkerStatus(row.Output)
+	infoByID := parseSwarmWorkerInfo(row.Output)
 	indent := "  "
 	ctxIndent := "    "
 
 	var lines []string
 
-	renderOne := func(id, role, prompt, st string, animating bool) {
-		lines = append(lines, renderSpawnHeader(styles, id, role, st, animating, spinnerFrame))
+	renderOne := func(id, role, prompt string, info swarmWorkerInfo, animating bool) {
+		lines = append(lines, renderSpawnHeader(styles, id, role, info.Status, info.Attempts, animating, spinnerFrame))
 		taskLine := indent + "└ " + term.TruncateWidth(oneLine(prompt), width-4)
 		lines = append(lines, styles.ToolSub.Render(taskLine))
+		if expanded && info.Error != "" {
+			lines = append(lines, styles.AssistError.Render(ctxIndent+"Error: "+info.Error))
+		}
 		if sharedContext != "" {
 			lines = append(lines, styles.ToolSub.Render(ctxIndent+"Context:"))
 			ctx := sharedContext
@@ -259,24 +300,24 @@ func renderAgentSwarmBlock(styles Styles, row toolRow, width int, expanded bool,
 	case len(tasks) > 0:
 		for i, task := range tasks {
 			id := swarmAgentLabel(task, i)
-			st := statusByID[id]
-			if row.Pending && st == "" {
-				st = "running…"
+			info := infoByID[id]
+			if row.Pending && info.Status == "" {
+				info.Status = "running…"
 			}
-			animating := row.Pending && (st == "" || st == "running…" || st == "planning…")
-			renderOne(id, "worker", task.Prompt, st, animating)
+			animating := row.Pending && (info.Status == "" || info.Status == "running…" || info.Status == "planning…")
+			renderOne(id, "worker", task.Prompt, info, animating)
 		}
 	case goal != "":
-		st := ""
+		info := swarmWorkerInfo{}
 		animating := row.Pending
 		if row.Pending {
-			st = "planning…"
+			info.Status = "planning…"
 		} else if row.Output != "" {
-			st = "done"
+			info.Status = "done"
 		}
-		renderOne("swarm", "planner", goal, st, animating)
+		renderOne("swarm", "planner", goal, info, animating)
 	default:
-		lines = append(lines, renderSpawnHeader(styles, "swarm", "worker", "", row.Pending, spinnerFrame))
+		lines = append(lines, renderSpawnHeader(styles, "swarm", "worker", "", 1, row.Pending, spinnerFrame))
 		lines = append(lines, styles.ToolSub.Render(indent+"└ agents"))
 	}
 

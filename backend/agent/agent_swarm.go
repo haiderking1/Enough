@@ -4,9 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/enough/enough/backend/opencode"
 )
@@ -20,20 +24,22 @@ const (
 )
 
 type swarmTask struct {
-	ID         string   `json:"id,omitempty"`
-	Prompt     string   `json:"prompt"`
-	DependsOn  []string `json:"depends_on,omitempty"`
-	upstream   string
+	ID        string   `json:"id,omitempty"`
+	Prompt    string   `json:"prompt"`
+	DependsOn []string `json:"depends_on,omitempty"`
+	upstream  string
 }
 
 type swarmWorkerResult struct {
-	ID      string
-	Prompt  string
-	Status  string // ok, error, aborted
-	Output  string
-	Error   string
-	Turns   int
+	ID       string
+	Prompt   string
+	Status   string // ok, error, aborted
+	Output   string
+	Error    string
+	Turns    int
 	Attempts int
+	Worktree string
+	Branch   string
 }
 
 func agentSwarmTool() opencode.Tool {
@@ -42,7 +48,7 @@ func agentSwarmTool() opencode.Tool {
 		Function: opencode.ToolFunction{
 			Name: "agent_swarm",
 			Description: fmt.Sprintf(
-				`Run many sub-agents in parallel. Pass "tasks" (one self-contained prompt each) or a single "goal" to have a planner split it into parallel subtasks. Each agent gets a fresh, isolated context with the standard coding tools (read_file, grep, glob, list_dir, bash, write_file, edit_file, web_search) scoped to the current directory. For pipelines, give a task a depends_on=[ids]: it waits for those agents and receives their output in its prompt. Up to %d agents per call; max_concurrency (default %d) run at once. All agents run on your model. Agents run with no turn limit by default (like you). Do not set max_turns_per_agent unless the user explicitly requests a cap. Agents can nest agent_swarm up to %d levels. Keep tasks disjoint to avoid conflicting edits.`,
+				`Run many sub-agents in parallel. Pass "tasks" (one self-contained prompt each) or a single "goal" to have a planner split it into parallel subtasks. Each agent gets a fresh, isolated context with the standard coding tools (read_file, grep, glob, list_dir, bash, write_file, edit_file, web_search) scoped to the current directory. For pipelines, give a task a depends_on=[ids]: it waits for those agents and receives their output in its prompt. Up to %d agents per call; max_concurrency (default %d) run at once. All agents run on your model. Agents run with no turn limit by default (like you). Do not set max_turns_per_agent unless the user explicitly requests a cap. Agents can nest agent_swarm up to %d nested swarm calls; from a top-level call this supports a four-worker chain (level1 -> level2 -> level3 -> level4). Keep tasks disjoint to avoid conflicting edits.`,
 				maxSwarmWorkers, defaultSwarmConcurrency, maxSwarmDepth,
 			),
 			Parameters: json.RawMessage(`{
@@ -90,6 +96,11 @@ func agentSwarmTool() opencode.Tool {
 					"max_turns_per_agent": {
 						"type": "number",
 						"description": "Do not use unless the user explicitly asks for a cap. Each agent runs to completion with no turn limit by default."
+					},
+					"isolate": {
+						"type": "string",
+						"enum": ["worktree"],
+						"description": "Set to \"worktree\" to run each agent in its own git worktree/branch so parallel edits never collide. Dirty worktrees are left for review; clean ones are removed."
 					}
 				}
 			}`),
@@ -102,16 +113,17 @@ func (a *Agent) toolAgentSwarm(ctx context.Context, callID, argsJSON string, dep
 	defer cancel()
 
 	var params struct {
-		Goal            string `json:"goal"`
-		Tasks           []struct {
+		Goal  string `json:"goal"`
+		Tasks []struct {
 			ID        string   `json:"id"`
 			Prompt    string   `json:"prompt"`
 			DependsOn []string `json:"depends_on"`
 		} `json:"tasks"`
-		SharedContext   string  `json:"shared_context"`
-		MaxConcurrency  float64 `json:"max_concurrency"`
-		Retry           float64 `json:"retry"`
+		SharedContext    string  `json:"shared_context"`
+		MaxConcurrency   float64 `json:"max_concurrency"`
+		Retry            float64 `json:"retry"`
 		MaxTurnsPerAgent float64 `json:"max_turns_per_agent"`
+		Isolate          string  `json:"isolate"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &params); err != nil {
 		return toolResult{output: fmt.Sprintf("error parsing parameters: %s", err), isErr: true}
@@ -144,6 +156,14 @@ func (a *Agent) toolAgentSwarm(ctx context.Context, callID, argsJSON string, dep
 			isErr:  true,
 		}
 	}
+	if params.Isolate != "" && params.Isolate != "worktree" {
+		return toolResult{output: fmt.Sprintf("agent_swarm: unsupported isolate mode %q", params.Isolate), isErr: true}
+	}
+	if params.Isolate != "worktree" {
+		if conflict := detectSwarmPathConflicts(a, tasks); conflict != "" {
+			return toolResult{output: conflict, isErr: true}
+		}
+	}
 
 	concurrency := defaultSwarmConcurrency
 	if params.MaxConcurrency > 0 {
@@ -167,6 +187,11 @@ func (a *Agent) toolAgentSwarm(ctx context.Context, callID, argsJSON string, dep
 	}
 
 	sharedContext := strings.TrimSpace(params.SharedContext)
+	repoRoot := ""
+	if params.Isolate == "worktree" {
+		repoRoot, _ = repoRootOf(a.workDir)
+	}
+	runID := fmt.Sprintf("%d", time.Now().UnixNano())
 	// onEach is called from every worker goroutine in the pool, so the progress
 	// counter and the progress emit must be serialized — concurrent appends to a
 	// shared slice here corrupt memory and surface as nondeterministic hangs at
@@ -182,6 +207,9 @@ func (a *Agent) toolAgentSwarm(ctx context.Context, callID, argsJSON string, dep
 	}
 
 	runOne := func(task swarmTask, index int) swarmWorkerResult {
+		if params.Isolate == "worktree" {
+			return a.runIsolatedSwarmWorker(ctx, task, index, depth, sharedContext, retries, maxTurns, repoRoot, runID)
+		}
 		return a.runSwarmWorker(ctx, task, index, depth, sharedContext, retries, maxTurns)
 	}
 
@@ -217,6 +245,41 @@ func parseSwarmTasks(raw []struct {
 	return tasks
 }
 
+var swarmPathCandidate = regexp.MustCompile("`([^`]+)`|(?:^|\\s)([A-Za-z0-9_./-]+\\.(?:go|md|txt|json|yaml|yml|toml|js|ts|tsx|jsx|css|html|sh|py|rs|java|c|cc|cpp|h|hpp|sql|xml|env)|[A-Za-z0-9_./-]+/[A-Za-z0-9_./-]+)(?:\\s|$)")
+
+func detectSwarmPathConflicts(a *Agent, tasks []swarmTask) string {
+	seen := map[string]int{}
+	labels := map[string]string{}
+	for i, task := range tasks {
+		for _, p := range promptPathCandidates(task.Prompt) {
+			resolved, err := a.resolvePath(p)
+			if err != nil {
+				continue
+			}
+			if prev, ok := seen[resolved]; ok && prev != i {
+				return fmt.Sprintf("agent_swarm: tasks %s and %s both target path %s — split or use isolate=worktree",
+					labels[resolved], swarmTaskID(task, i), filepath.ToSlash(p))
+			}
+			seen[resolved] = i
+			labels[resolved] = swarmTaskID(task, i)
+		}
+	}
+	return ""
+}
+
+func promptPathCandidates(prompt string) []string {
+	var paths []string
+	for _, m := range swarmPathCandidate.FindAllStringSubmatch(prompt, -1) {
+		candidate := strings.TrimSpace(firstNonEmpty(m[1], m[2]))
+		candidate = strings.Trim(candidate, `"'.,:;()[]{}<>`)
+		if candidate == "" || strings.HasPrefix(candidate, "http://") || strings.HasPrefix(candidate, "https://") {
+			continue
+		}
+		paths = append(paths, candidate)
+	}
+	return paths
+}
+
 func swarmTaskID(task swarmTask, index int) string {
 	if id := strings.TrimSpace(task.ID); id != "" {
 		return id
@@ -225,6 +288,10 @@ func swarmTaskID(task swarmTask, index int) string {
 }
 
 func (a *Agent) runSwarmWorker(ctx context.Context, task swarmTask, index, depth int, sharedContext string, retries, maxTurns int) swarmWorkerResult {
+	return a.runSwarmWorkerInDir(ctx, task, index, depth, sharedContext, retries, maxTurns, a.workDir)
+}
+
+func (a *Agent) runSwarmWorkerInDir(ctx context.Context, task swarmTask, index, depth int, sharedContext string, retries, maxTurns int, workDir string) swarmWorkerResult {
 	id := swarmTaskID(task, index)
 	attempt := 0
 	var lastError string
@@ -232,13 +299,13 @@ func (a *Agent) runSwarmWorker(ctx context.Context, task swarmTask, index, depth
 	worker := &Agent{
 		cfg:        a.cfg,
 		client:     a.client,
-		workDir:    a.workDir,
+		workDir:    workDir,
 		emit:       nil, // worker tools stay off the parent transcript
 		swarmDepth: depth,
 	}
 
 	for {
-		if ctx.Err() != nil {
+		if userAbortFired(ctx) {
 			return swarmWorkerResult{ID: id, Prompt: task.Prompt, Status: "aborted", Turns: 0, Attempts: attempt + 1}
 		}
 
@@ -259,7 +326,7 @@ func (a *Agent) runSwarmWorker(ctx context.Context, task swarmTask, index, depth
 
 		emptyOK := status == "ok" && strings.TrimSpace(output) == ""
 		emptyAbort := status == "aborted" && strings.TrimSpace(output) == ""
-		if (status == "error" || emptyOK || emptyAbort) && attempt < retries {
+		if (status == "error" || emptyOK || (emptyAbort && !userAbortFired(ctx))) && attempt < retries {
 			if emptyOK {
 				lastError = "returned no output"
 			} else if emptyAbort {
@@ -272,6 +339,78 @@ func (a *Agent) runSwarmWorker(ctx context.Context, task swarmTask, index, depth
 		}
 		return result
 	}
+}
+
+func (a *Agent) runIsolatedSwarmWorker(ctx context.Context, task swarmTask, index, depth int, sharedContext string, retries, maxTurns int, repoRoot, runID string) swarmWorkerResult {
+	if repoRoot == "" {
+		return a.runSwarmWorker(ctx, task, index, depth, sharedContext, retries, maxTurns)
+	}
+
+	id := swarmTaskID(task, index)
+	safe := safeSwarmID(id)
+	branch := fmt.Sprintf("swarm/%s/%s", runID, safe)
+	base := filepath.Join(os.TempDir(), "enough-swarm-"+runID)
+	dir := filepath.Join(base, safe)
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		fallback := a.runSwarmWorker(ctx, task, index, depth, sharedContext, retries, maxTurns)
+		fallback.Error = firstNonEmpty(fallback.Error, "worktree setup failed: "+err.Error())
+		return fallback
+	}
+	if err := git(repoRoot, "worktree", "add", "-b", branch, dir, "HEAD"); err != nil {
+		fallback := a.runSwarmWorker(ctx, task, index, depth, sharedContext, retries, maxTurns)
+		fallback.Error = firstNonEmpty(fallback.Error, "worktree setup failed: "+err.Error())
+		return fallback
+	}
+
+	result := a.runSwarmWorkerInDir(ctx, task, index, maxSwarmDepth, sharedContext, retries, maxTurns, dir)
+	kept := true
+	if status, err := gitOutput(dir, "status", "--porcelain"); err == nil {
+		kept = strings.TrimSpace(status) != ""
+		if !kept {
+			_ = git(repoRoot, "worktree", "remove", "--force", dir)
+			_ = git(repoRoot, "branch", "-D", branch)
+		}
+	}
+	if kept {
+		result.Worktree = dir
+		result.Branch = branch
+	}
+	return result
+}
+
+func safeSwarmID(id string) string {
+	re := regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
+	safe := strings.Trim(re.ReplaceAllString(id, "-"), "-")
+	if safe == "" {
+		return "agent"
+	}
+	return safe
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func git(cwd string, args ...string) error {
+	_, err := gitOutput(cwd, args...)
+	return err
+}
+
+func gitOutput(cwd string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = cwd
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), strings.TrimSpace(string(out)))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func repoRootOf(workDir string) (string, error) {
+	return gitOutput(workDir, "rev-parse", "--show-toplevel")
 }
 
 func buildSwarmWorkerPrompt(task swarmTask, sharedContext string, attempt int, lastError string) string {
@@ -307,7 +446,7 @@ func (a *Agent) runWorkerLoop(ctx context.Context, prompt string, maxTurns int) 
 	var lastSwarmOutput string
 
 	for {
-		if err := ctx.Err(); err != nil {
+		if userAbortFired(ctx) {
 			return extractLastAssistantText(messages), turns, "aborted", ""
 		}
 		if maxTurns > 0 && turns >= maxTurns {
@@ -322,11 +461,11 @@ func (a *Agent) runWorkerLoop(ctx context.Context, prompt string, maxTurns int) 
 		opencode.ApplyThinkingToRequest(&req, opencode.ParseThinkingLevel(a.cfg.ThinkingLevel), a.cfg.Model)
 
 		streamCtx, streamCancel := linkedSwarmContext(ctx)
-		msg, err := a.client.ChatStream(streamCtx, req, opencode.StreamCallbacks{})
+		msg, err := a.client.ChatStreamRetry(streamCtx, req, opencode.StreamCallbacks{})
 		streamCancel()
 		turns++
 		if err != nil {
-			if ctx.Err() != nil {
+			if userAbortFired(ctx) {
 				return extractLastAssistantText(messages), turns, "aborted", ""
 			}
 			return extractLastAssistantText(messages), turns, "error", err.Error()
@@ -346,7 +485,7 @@ func (a *Agent) runWorkerLoop(ctx context.Context, prompt string, maxTurns int) 
 		for idx, call := range msg.ToolCalls {
 			// Don't bail before a nested swarm — it runs on its own linked context
 			// and may still succeed even if a parent stream ctx flickered.
-			if call.Function.Name != "agent_swarm" && ctx.Err() != nil {
+			if call.Function.Name != "agent_swarm" && userAbortFired(ctx) {
 				return extractLastAssistantText(messages), turns, "aborted", ""
 			}
 			id := call.ID
@@ -357,7 +496,7 @@ func (a *Agent) runWorkerLoop(ctx context.Context, prompt string, maxTurns int) 
 			result := a.executeSwarmTool(ctx, id, call.Function.Name, call.Function.Arguments)
 			a.toolResult(id, result.output, result.isErr)
 
-			if call.Function.Name == "agent_swarm" && !result.isErr {
+			if call.Function.Name == "agent_swarm" {
 				lastSwarmOutput = result.output
 				if onlySwarm {
 					swarmResult = result
@@ -377,8 +516,19 @@ func (a *Agent) runWorkerLoop(ctx context.Context, prompt string, maxTurns int) 
 		// through the model again — real models often return empty or a useless
 		// one-liner instead of echoing the child's payload, which breaks deep
 		// nesting (~75% failure at 4+ levels in manual testing).
-		if onlySwarm && strings.TrimSpace(swarmResult.output) != "" && !swarmResult.isErr {
-			return swarmResult.output, turns, "ok", ""
+		if onlySwarm {
+			if payload := extractSwarmPayload(swarmResult.output); payload != "" {
+				return payload, turns, "ok", ""
+			}
+			if strings.TrimSpace(swarmResult.output) != "" && !swarmResult.isErr {
+				return strings.TrimSpace(swarmResult.output), turns, "ok", ""
+			}
+			if swarmResult.isErr {
+				return "", turns, "error", strings.TrimSpace(swarmResult.output)
+			}
+		}
+		if payload := extractSwarmPayload(lastSwarmOutput); payload != "" {
+			return payload, turns, "ok", ""
 		}
 	}
 }
@@ -391,7 +541,7 @@ func linkedSwarmContext(parent context.Context) (context.Context, context.Cancel
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		select {
-		case <-parent.Done():
+		case <-userAbortDone(parent):
 			cancel()
 		case <-ctx.Done():
 		}
@@ -404,10 +554,93 @@ func linkedSwarmContext(parent context.Context) (context.Context, context.Cancel
 // nested agent_swarm, fall back to that swarm's aggregated output so deeply
 // nested results survive the trip back up instead of being dropped.
 func resolveWorkerOutput(finalText, lastSwarmOutput string) string {
-	if trimmed := strings.TrimSpace(finalText); trimmed != "" {
+	if trimmed := strings.TrimSpace(finalText); trimmed != "" && !isSwarmStubText(trimmed) {
 		return trimmed
 	}
+	if payload := extractSwarmPayload(lastSwarmOutput); payload != "" {
+		return payload
+	}
 	return strings.TrimSpace(lastSwarmOutput)
+}
+
+func isSwarmStubText(s string) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(s))
+	trimmed = strings.Trim(trimmed, " \t\r\n.!?")
+	trimmed = strings.Join(strings.Fields(trimmed), " ")
+	switch trimmed {
+	case "", "ok", "okay", "done", "all done", "complete", "completed", "task complete", "task completed", "finished":
+		return true
+	default:
+		return false
+	}
+}
+
+var swarmSectionHeader = regexp.MustCompile(`(?m)^##\s+(.+?)\s+\[(ok|error|aborted)\]\s*(?:\([^)]+\))?.*$`)
+
+func extractSwarmPayload(output string) string {
+	if !swarmSectionHeader.MatchString(output) {
+		return ""
+	}
+	payload, _ := extractSwarmPayloadAtDepth(output, 0)
+	return payload
+}
+
+func extractSwarmPayloadAtDepth(output string, depth int) (string, int) {
+	matches := swarmSectionHeader.FindAllStringSubmatchIndex(output, -1)
+	bestPayload := ""
+	bestDepth := -1
+	if len(matches) == 0 {
+		clean := cleanSwarmBody(output)
+		if clean == "" {
+			return "", -1
+		}
+		return clean, depth
+	}
+	for i, m := range matches {
+		status := output[m[4]:m[5]]
+		bodyStart := m[1]
+		bodyEnd := len(output)
+		if i+1 < len(matches) {
+			bodyEnd = matches[i+1][0]
+		}
+		body := output[bodyStart:bodyEnd]
+		child, childDepth := extractSwarmPayloadAtDepth(body, depth+1)
+		if child != "" && childDepth > bestDepth {
+			bestPayload = child
+			bestDepth = childDepth
+		}
+		if status != "ok" {
+			continue
+		}
+		clean := cleanSwarmBody(body)
+		if clean != "" && depth >= bestDepth {
+			bestPayload = clean
+			bestDepth = depth
+		}
+	}
+	return bestPayload, bestDepth
+}
+
+func cleanSwarmBody(body string) string {
+	var lines []string
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			lines = append(lines, line)
+			continue
+		}
+		if trimmed == "(no output)" || strings.HasPrefix(trimmed, "Ran ") || strings.HasPrefix(trimmed, "Goal: ") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "agent_swarm: ") && strings.Contains(trimmed, " agents finished") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "## ") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func extractLastAssistantText(messages []opencode.Message) string {
@@ -433,6 +666,7 @@ func (a *Agent) planSwarmTasks(ctx context.Context, goal string) ([]swarmTask, s
 		"You are a planner for a parallel agent swarm.",
 		"Goal: " + goal,
 		"Break this into subtasks. Prefer INDEPENDENT subtasks that can run in parallel (split by file, module, or area).",
+		"Assign at most one writer to any file in this swarm call. Split by module/path; never ask parallel workers to edit the same path.",
 		"When one subtask genuinely needs another's result, express that with depends_on instead of forcing it into one task.",
 		"Use your read-only tools to inspect the repo as needed.",
 		`Reply with ONLY a JSON array. Each element: {"id": "short-label", "prompt": "complete self-contained instruction", "depends_on": ["other-id", ...]}.`,
@@ -462,7 +696,7 @@ func (a *Agent) runPlannerLoop(ctx context.Context, prompt string) (output strin
 	}
 
 	for {
-		if err := ctx.Err(); err != nil {
+		if userAbortFired(ctx) {
 			return extractLastAssistantText(messages), turns, "aborted", ""
 		}
 		if turns >= swarmAuxMaxIterations {
@@ -476,10 +710,12 @@ func (a *Agent) runPlannerLoop(ctx context.Context, prompt string) (output strin
 		}
 		opencode.ApplyThinkingToRequest(&req, opencode.ParseThinkingLevel(a.cfg.ThinkingLevel), a.cfg.Model)
 
-		msg, err := a.client.ChatStream(ctx, req, opencode.StreamCallbacks{})
+		streamCtx, streamCancel := linkedSwarmContext(ctx)
+		msg, err := a.client.ChatStreamRetry(streamCtx, req, opencode.StreamCallbacks{})
+		streamCancel()
 		turns++
 		if err != nil {
-			if ctx.Err() != nil {
+			if userAbortFired(ctx) {
 				return extractLastAssistantText(messages), turns, "aborted", ""
 			}
 			return extractLastAssistantText(messages), turns, "error", err.Error()
@@ -679,7 +915,7 @@ func runSwarmDAGPool(
 			if !ready {
 				continue
 			}
-			if ctx.Err() != nil {
+			if userAbortFired(ctx) {
 				continue
 			}
 			var failedDep *int
@@ -730,7 +966,7 @@ func runSwarmDAGPool(
 			for i := 0; i < len(tasks); i++ {
 				if !done[i] {
 					reason := "skipped: unresolved dependency cycle"
-					if ctx.Err() != nil {
+					if userAbortFired(ctx) {
 						reason = ""
 					}
 					r := swarmAbortedStub(tasks[i], i)
@@ -754,7 +990,7 @@ func runSwarmDAGPool(
 			if waitCh != nil {
 				select {
 				case <-waitCh:
-				case <-ctx.Done():
+				case <-userAbortDone(ctx):
 				}
 			}
 		}
@@ -805,7 +1041,10 @@ func swarmWorkerSection(w swarmWorkerResult) string {
 		retry = fmt.Sprintf(" ×%d", w.Attempts)
 	}
 	header := fmt.Sprintf("## %s [%s] (%s%s)", w.ID, w.Status, turns, retry)
-	if w.Status == "error" && w.Error != "" {
+	if w.Worktree != "" && w.Branch != "" {
+		header += fmt.Sprintf(" (worktree: %s · branch: %s)", w.Worktree, w.Branch)
+	}
+	if w.Status != "ok" && w.Error != "" {
 		return header + "\nError: " + w.Error
 	}
 	body := w.Output
