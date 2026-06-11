@@ -111,7 +111,7 @@ func TestSingleToolNoHeader(t *testing.T) {
 	out := renderToolGroup(styles, []chatMsg{{
 		toolName: "write_file",
 		toolArgs: `{"path":"main.py","content":"a"}`,
-	}}, 80, false)
+	}}, 80, false, 0)
 	if strings.Contains(out, "Updated") {
 		t.Fatalf("single tool should not show group header: %q", out)
 	}

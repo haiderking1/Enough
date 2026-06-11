@@ -66,9 +66,8 @@ type FileEntry struct {
 	SessionEntry
 
 	// Header fields (for type: "session")
-	Version       int    `json:"version,omitempty"`
-	CWD           string `json:"cwd,omitempty"`
-	ParentSession string `json:"parentSession,omitempty"`
+	Version int    `json:"version,omitempty"`
+	CWD     string `json:"cwd,omitempty"`
 }
 
 type Header struct {
