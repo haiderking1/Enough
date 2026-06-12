@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/enough/enough/backend/agent/obligations"
 	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/core"
+	"github.com/enough/enough/backend/memory"
 	"github.com/enough/enough/backend/opencode"
 	"github.com/enough/enough/backend/session"
 )
@@ -58,6 +60,40 @@ type Agent struct {
 
 	compactionCancel          context.CancelFunc
 	overflowRecoveryAttempted bool
+
+	// memStore is the built-in persistent memory (MEMORY.md / USER.md).
+	// Shared by reference with background-review forks so their writes land
+	// on the parent's disk state. Nil when memory is disabled.
+	memStore *memory.Store
+
+	// cachedSystemPrompt is the session system prompt, built once per
+	// session and replayed verbatim every turn (prefix-cache invariant).
+	// Invalidated only on /new, session switch, compaction, or explicit
+	// invalidation — never by mid-session memory writes.
+	cachedSystemPrompt string
+
+	// notify delivers out-of-band system lines to the frontend (background
+	// review and curator summaries). Unlike emit, it stays valid after the
+	// turn's event channel closes.
+	notify func(string)
+
+	// writeOrigin distinguishes foreground (user-directed) tool writes from
+	// background-review writes. Only background-review skill creates are
+	// marked agent-created (curator-eligible).
+	writeOrigin string
+
+	// Nudge counters for the background self-improvement review.
+	userTurnCount    int
+	turnsSinceMemory int
+	itersSinceSkill  int
+
+	// maxIterations caps model calls per turn when > 0 (used by review and
+	// curator forks; the main agent runs unbounded).
+	maxIterations int
+
+	// reviewWG tracks in-flight background review goroutines (tests and
+	// shutdown can wait on it).
+	reviewWG sync.WaitGroup
 }
 
 func New(cfg config.Runtime, workDir string, sm *session.Manager) *Agent {
@@ -66,11 +102,22 @@ func New(cfg config.Runtime, workDir string, sm *session.Manager) *Agent {
 	}
 
 	a := &Agent{
-		cfg:     cfg,
-		client:  opencode.NewClient(cfg.Endpoint, cfg.APIKey, cfg.Model),
-		workDir: workDir,
-		session: sm,
+		cfg:         cfg,
+		client:      opencode.NewClient(cfg.Endpoint, cfg.APIKey, cfg.Model),
+		workDir:     workDir,
+		session:     sm,
+		writeOrigin: WriteOriginForeground,
 	}
+	a.initMemoryStore()
+
+	// Resumed sessions replay their stored system prompt verbatim so the
+	// upstream prefix cache stays warm; fresh sessions build a new one.
+	if sm != nil {
+		if stored := sm.StoredSystemPrompt(); stored != "" {
+			a.cachedSystemPrompt = stored
+		}
+	}
+
 	a.messages = []opencode.Message{
 		{Role: "system", Content: opencode.StringContent(a.systemPrompt())},
 	}
@@ -80,6 +127,17 @@ func New(cfg config.Runtime, workDir string, sm *session.Manager) *Agent {
 	}
 
 	return a
+}
+
+// initMemoryStore creates and loads the memory store (frozen snapshot) when
+// the memory stack is enabled.
+func (a *Agent) initMemoryStore() {
+	if !a.cfg.Memory.Enabled && !a.cfg.Memory.UserProfileEnabled {
+		a.memStore = nil
+		return
+	}
+	a.memStore = memory.NewStore(a.cfg.Memory.MemoryCharLimit, a.cfg.Memory.UserCharLimit)
+	a.memStore.LoadFromDisk()
 }
 
 type userAbortContextKey struct{}
@@ -115,7 +173,19 @@ func (a *Agent) Session() *session.Manager {
 func (a *Agent) LoadSession(sm *session.Manager) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	sessionChanged := a.session == nil || sm == nil || a.session.SessionID() != sm.SessionID()
 	a.session = sm
+	if sessionChanged {
+		a.invalidateSystemPrompt()
+		a.userTurnCount = 0
+		a.turnsSinceMemory = 0
+		a.itersSinceSkill = 0
+		if sm != nil {
+			if stored := sm.StoredSystemPrompt(); stored != "" {
+				a.cachedSystemPrompt = stored
+			}
+		}
+	}
 	a.messages = []opencode.Message{
 		{Role: "system", Content: opencode.StringContent(a.systemPrompt())},
 	}
@@ -126,14 +196,21 @@ func (a *Agent) Reset() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	// New session boundary: fresh memory snapshot, fresh prompt.
+	a.invalidateSystemPrompt()
+	a.userTurnCount = 0
+	a.turnsSinceMemory = 0
+	a.itersSinceSkill = 0
+
+	var err error
+	if a.session != nil {
+		err = a.session.NewSession()
+	}
+
 	a.messages = []opencode.Message{
 		{Role: "system", Content: opencode.StringContent(a.systemPrompt())},
 	}
-
-	if a.session != nil {
-		return a.session.NewSession()
-	}
-	return nil
+	return err
 }
 
 func (a *Agent) persist(msg opencode.Message) {
@@ -199,14 +276,43 @@ func (a *Agent) AbortAndWait() {
 func (a *Agent) UpdateConfig(cfg config.Runtime) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.applyConfigLocked(cfg)
+}
+
+// applyConfigLocked swaps the runtime config. A SOUL/MEMORY/skills policy
+// change is a prompt-affecting boundary, so the cached system prompt is
+// invalidated; routine changes (model, thinking level) leave it untouched.
+func (a *Agent) applyConfigLocked(cfg config.Runtime) {
+	promptAffecting := !reflect.DeepEqual(a.cfg.Memory, cfg.Memory) ||
+		!reflect.DeepEqual(a.cfg.Skills, cfg.Skills)
 	a.cfg = cfg
 	a.client = opencode.NewClient(cfg.Endpoint, cfg.APIKey, cfg.Model)
+	if promptAffecting {
+		a.initMemoryStore()
+		a.invalidateSystemPrompt()
+	}
 }
 
 func (a *Agent) SetEmit(emit func(core.Event)) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.emit = emit
+}
+
+// SetNotify installs the out-of-band system-line callback used by background
+// review and curator summaries. Must be safe to call from any goroutine and
+// must outlive individual turns.
+func (a *Agent) SetNotify(notify func(string)) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.notify = notify
+}
+
+// MemoryStore exposes the built-in memory store (nil when disabled).
+func (a *Agent) MemoryStore() *memory.Store {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.memStore
 }
 
 // Prompt appends a user message and runs the agent loop until the model stops
@@ -224,10 +330,22 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 	a.cancel = cancel
 	a.userAbortCtx = userAbortCtx
 	a.userAbortCancel = userAbortCancel
-	a.cfg = cfg
-	a.client = opencode.NewClient(cfg.Endpoint, cfg.APIKey, cfg.Model)
+	a.applyConfigLocked(cfg)
 	if emit != nil {
 		a.emit = emit
+	}
+
+	// Hydrate per-session nudge counters from persisted history on resume,
+	// then track this user turn for the memory review trigger.
+	a.hydrateNudgeCountersLocked()
+	a.userTurnCount++
+	shouldReviewMemory := false
+	if a.cfg.Memory.NudgeInterval > 0 && a.memStore != nil && a.cfg.Memory.Enabled {
+		a.turnsSinceMemory++
+		if a.turnsSinceMemory >= a.cfg.Memory.NudgeInterval {
+			shouldReviewMemory = true
+			a.turnsSinceMemory = 0
+		}
 	}
 	a.mu.Unlock()
 
@@ -307,13 +425,51 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 		a.mu.Unlock()
 	}()
 
-	return a.runLoop(ctx)
+	err := a.runLoop(ctx)
+
+	// Background self-improvement review — runs AFTER the response is
+	// delivered so it never competes with the user's turn. Skipped on error
+	// or interrupt.
+	if err == nil && ctx.Err() == nil && !userAbortFired(ctx) {
+		a.maybeSpawnBackgroundReview(shouldReviewMemory)
+	}
+
+	return err
+}
+
+// hydrateNudgeCountersLocked restores per-session nudge counters from
+// persisted history when this agent resumes a session it hasn't counted yet.
+// Caller holds a.mu.
+func (a *Agent) hydrateNudgeCountersLocked() {
+	if a.userTurnCount != 0 || a.session == nil {
+		return
+	}
+	priorUserTurns := 0
+	for _, msg := range a.session.Messages() {
+		if msg.Role == "user" {
+			priorUserTurns++
+		}
+	}
+	if priorUserTurns == 0 {
+		return
+	}
+	a.userTurnCount = priorUserTurns
+	if a.cfg.Memory.NudgeInterval > 0 && a.turnsSinceMemory == 0 {
+		a.turnsSinceMemory = priorUserTurns % a.cfg.Memory.NudgeInterval
+	}
 }
 
 func (a *Agent) runLoop(ctx context.Context) error {
-	tools := nativeTools(a.cfg)
+	tools := a.toolMenu()
 
+	iterations := 0
 	for {
+		// Iteration budget (review/curator forks only; 0 = unbounded).
+		iterations++
+		if a.maxIterations > 0 && iterations > a.maxIterations {
+			return nil
+		}
+
 		if err := ctx.Err(); err != nil {
 			if errors.Is(err, context.Canceled) {
 				a.interrupted()
@@ -485,6 +641,10 @@ func (a *Agent) runLoop(ctx context.Context) error {
 
 		a.mu.Lock()
 		a.messages = append(a.messages, msg)
+		// Tool iteration — feeds the background skill-review nudge.
+		if a.cfg.Memory.SkillNudgeInterval > 0 {
+			a.itersSinceSkill++
+		}
 		a.mu.Unlock()
 		a.persist(msg)
 
@@ -600,13 +760,57 @@ func (a *Agent) err(text string) {
 	}
 }
 
+// systemPrompt returns the session-cached system prompt, building and
+// persisting it on first use. Callers may hold a.mu — no locking here.
 func (a *Agent) systemPrompt() string {
-	tools := nativeTools(a.cfg)
+	if a.cachedSystemPrompt == "" {
+		a.cachedSystemPrompt = a.buildSessionPrompt()
+		a.persistSystemPrompt()
+	}
+	return a.cachedSystemPrompt
+}
+
+func (a *Agent) buildSessionPrompt() string {
+	tools := a.toolMenu()
 	var toolNames []string
 	for _, t := range tools {
 		toolNames = append(toolNames, t.Function.Name)
 	}
-	return BuildSystemPrompt(a.workDir, a.cfg, toolNames)
+	sessionID := ""
+	if a.session != nil {
+		sessionID = a.session.SessionID()
+	}
+	return BuildSessionSystemPrompt(SystemPromptInputs{
+		WorkDir:   a.workDir,
+		Cfg:       a.cfg,
+		ToolNames: toolNames,
+		Store:     a.memStore,
+		SessionID: sessionID,
+	})
+}
+
+func (a *Agent) persistSystemPrompt() {
+	if a.session != nil && a.cachedSystemPrompt != "" {
+		_ = a.session.SetSystemPrompt(a.cachedSystemPrompt)
+	}
+}
+
+// invalidateSystemPrompt forces a rebuild on next use and reloads memory from
+// disk so the rebuilt prompt captures this session's writes (fresh frozen
+// snapshot). Called at session boundaries only: /new, session switch,
+// compaction. Caller may hold a.mu.
+func (a *Agent) invalidateSystemPrompt() {
+	a.cachedSystemPrompt = ""
+	if a.memStore != nil {
+		a.memStore.LoadFromDisk()
+	}
+}
+
+// InvalidateSystemPrompt is the exported, self-locking variant.
+func (a *Agent) InvalidateSystemPrompt() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.invalidateSystemPrompt()
 }
 
 func (a *Agent) Cfg() config.Runtime {

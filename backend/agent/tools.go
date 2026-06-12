@@ -63,6 +63,8 @@ func (a *Agent) dispatchTool(ctx context.Context, id, name, argsJSON string) too
 		return a.toolSkillView(argsJSON)
 	case "skill_manage":
 		return a.toolSkillManage(argsJSON)
+	case "memory":
+		return a.toolMemory(argsJSON)
 	default:
 		return toolResult{output: fmt.Sprintf("unknown tool: %s", name), isErr: true}
 	}
@@ -90,6 +92,14 @@ func (a *Agent) toolSkillView(argsJSON string) toolResult {
 }
 
 func (a *Agent) toolSkillManage(argsJSON string) toolResult {
-	output, isErr := skills.ExecuteSkillManage(argsJSON, skills.SkillManageOptions{GuardEnabled: true})
+	// Skill provenance: only the background-review fork marks creations as
+	// agent-created (curator-eligible). Foreground user-directed creations
+	// belong to the user and are never auto-curated.
+	output, isErr := skills.ExecuteSkillManage(argsJSON, skills.SkillManageOptions{
+		GuardEnabled:       true,
+		MarkCreatedAsAgent: a.writeOrigin == WriteOriginBackgroundReview,
+		// Autonomous passes never destroy data: delete becomes archive.
+		ArchiveOnDelete: a.writeOrigin == WriteOriginBackgroundReview,
+	})
 	return toolResult{output: output, isErr: isErr}
 }

@@ -7,6 +7,11 @@ import (
 type SkillManageOptions struct {
 	GuardEnabled       bool
 	MarkCreatedAsAgent bool
+	// ArchiveOnDelete turns 'delete' into an archive (move to .archive/).
+	// Set for background-review and curator forks — autonomous passes must
+	// never destroy data; archives are recoverable. It also hard-protects
+	// the curator-protected builtins from autonomous removal.
+	ArchiveOnDelete bool
 }
 
 type skillManageArgs struct {
@@ -37,7 +42,11 @@ func ExecuteSkillManage(argsJSON string, opts SkillManageOptions) (string, bool)
 	case "patch":
 		result, err = patchSkill(args.Name, args.OldString, args.NewString, args.FilePath, args.ReplaceAll, opts.GuardEnabled)
 	case "delete":
-		result, err = deleteSkill(args.Name, args.AbsorbedInto, opts.GuardEnabled)
+		if opts.ArchiveOnDelete {
+			result, err = archiveDeleteSkill(args.Name, args.AbsorbedInto)
+		} else {
+			result, err = deleteSkill(args.Name, args.AbsorbedInto, opts.GuardEnabled)
+		}
 	case "write_file":
 		result, err = writeSkillFile(args.Name, args.FilePath, args.FileContent, opts.GuardEnabled)
 	case "remove_file":
@@ -65,7 +74,11 @@ func ExecuteSkillManage(argsJSON string, opts SkillManageOptions) (string, bool)
 		case "patch", "edit", "write_file", "remove_file":
 			BumpPatch(args.Name)
 		case "delete":
-			Forget(args.Name)
+			// Archived skills keep their usage record (state=archived was
+			// set by ArchiveSkill); hard deletes forget it.
+			if !opts.ArchiveOnDelete {
+				Forget(args.Name)
+			}
 		}
 	}
 

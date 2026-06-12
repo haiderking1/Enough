@@ -93,6 +93,15 @@ type App struct {
 
 	mu       sync.Mutex
 	renderCh chan struct{}
+
+	// notifyCh carries out-of-band system lines (background review and
+	// curator summaries) from goroutines that outlive a turn's event
+	// channel. Drained by the main loop.
+	notifyCh chan string
+
+	// lastActiveAt is the end of the last agent activity, feeding the
+	// curator's min-idle gate.
+	lastActiveAt time.Time
 }
 
 func newApp(t *term.Terminal) *App {
@@ -104,8 +113,20 @@ func newApp(t *term.Terminal) *App {
 		editor:                NewEditor(512),
 		lastActivityWordIndex: -1,
 		renderCh:              make(chan struct{}, 1),
+		notifyCh:              make(chan string, 16),
 		modelRegistry:         opencode.NewRegistry(),
+		lastActiveAt:          time.Now(),
 	}
+}
+
+// notifyAsync delivers a system line from any goroutine. Non-blocking; the
+// main loop drains notifyCh and renders.
+func (a *App) notifyAsync(text string) {
+	select {
+	case a.notifyCh <- text:
+	default:
+	}
+	a.requestRender()
 }
 
 func (a *App) run() error {
@@ -157,6 +178,14 @@ func (a *App) run() error {
 	compactionTick := time.NewTicker(80 * time.Millisecond)
 	defer compactionTick.Stop()
 
+	// Curator: session-start check (static gates only) plus a periodic idle
+	// tick. Runs in the background; summaries arrive via notifyCh.
+	if cfg, err := config.LoadRuntime(); err == nil && auth.Connected() {
+		go agent.MaybeRunCurator(cfg, -1, a.notifyAsync)
+	}
+	curatorTick := time.NewTicker(10 * time.Minute)
+	defer curatorTick.Stop()
+
 	for !a.quit {
 		a.mu.Lock()
 		agentCh := a.agentCh
@@ -178,6 +207,7 @@ func (a *App) run() error {
 			if !ok {
 				a.mu.Lock()
 				a.running = false
+				a.lastActiveAt = time.Now()
 				a.agentCh = nil
 				a.stopAgentActivity()
 				a.mu.Unlock()
@@ -189,6 +219,7 @@ func (a *App) run() error {
 						if !ok {
 							a.mu.Lock()
 							a.running = false
+							a.lastActiveAt = time.Now()
 							a.agentCh = nil
 							a.stopAgentActivity()
 							a.mu.Unlock()
@@ -202,6 +233,22 @@ func (a *App) run() error {
 			}
 		agentEventsDone:
 			a.requestRender()
+
+		case text := <-a.notifyCh:
+			a.appendMessage("system", text)
+			a.bumpChat()
+			a.requestRender()
+
+		case <-curatorTick.C:
+			a.mu.Lock()
+			running := a.running
+			idleFor := time.Since(a.lastActiveAt)
+			a.mu.Unlock()
+			if !running && auth.Connected() {
+				if cfg, err := config.LoadRuntime(); err == nil {
+					go agent.MaybeRunCurator(cfg, idleFor, a.notifyAsync)
+				}
+			}
 
 		case <-a.renderCh:
 			a.mu.Lock()
@@ -259,6 +306,7 @@ func (a *App) initSession() error {
 func (a *App) ensureAgent(cfg config.Runtime) *agent.Agent {
 	if a.agent == nil {
 		a.agent = agent.New(cfg, "", a.session)
+		a.agent.SetNotify(a.notifyAsync)
 		return a.agent
 	}
 	a.agent.UpdateConfig(cfg)

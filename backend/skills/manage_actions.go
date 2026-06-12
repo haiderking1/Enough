@@ -506,6 +506,40 @@ func patchSkill(name, oldString, newString, filePath string, replaceAll bool, gu
 	})
 }
 
+// archiveDeleteSkill is the autonomous-pass variant of delete: the skill
+// directory is moved to .archive/ (recoverable) instead of removed, and the
+// curator-protected builtins are refused outright.
+func archiveDeleteSkill(name, absorbedInto string) (SkillManageResult, error) {
+	if IsProtectedBuiltin(name) {
+		return SkillManageResult{Success: false, Error: fmt.Sprintf("Skill '%s' is a protected built-in and cannot be archived or deleted by an autonomous pass.", name)}, nil
+	}
+
+	trimmedAbsorbed := strings.TrimSpace(absorbedInto)
+	if trimmedAbsorbed != "" {
+		if trimmedAbsorbed == name {
+			return SkillManageResult{Success: false, Error: fmt.Sprintf("absorbed_into='%s' cannot equal the skill being deleted.", trimmedAbsorbed)}, nil
+		}
+		if FindSkillDirectory(trimmedAbsorbed) == "" {
+			return SkillManageResult{Success: false, Error: fmt.Sprintf("absorbed_into='%s' does not exist. Create or patch the umbrella skill first, then retry the delete.", trimmedAbsorbed)}, nil
+		}
+	}
+
+	ok, msg := ArchiveSkill(name)
+	if !ok {
+		return SkillManageResult{Success: false, Error: msg}, nil
+	}
+	if IsBundledSkillName(name) {
+		MarkSuppressed(name)
+	}
+	invalidateCache()
+
+	out := fmt.Sprintf("Skill '%s' archived (%s).", name, msg)
+	if trimmedAbsorbed != "" {
+		out += fmt.Sprintf(" Content absorbed into '%s'.", trimmedAbsorbed)
+	}
+	return SkillManageResult{Success: true, Message: out}, nil
+}
+
 func deleteSkill(name, absorbedInto string, _guardEnabled bool) (SkillManageResult, error) {
 	skillDir := FindSkillDirectory(name)
 	if skillDir == "" {
