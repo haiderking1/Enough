@@ -58,6 +58,56 @@ type SkillsSettings struct {
 	Disabled            []string `json:"disabled"`
 }
 
+// MemorySettings controls the built-in persistent memory (MEMORY.md/USER.md)
+// and the background self-improvement review nudges. Unlike Hermes, Enough
+// defaults memory ON; the semantics otherwise match Hermes' built-in memory.
+type MemorySettings struct {
+	Enabled            bool `json:"memory_enabled"`
+	UserProfileEnabled bool `json:"user_profile_enabled"`
+	// NudgeInterval is the number of user turns between background memory
+	// reviews. 0 disables the memory review trigger.
+	NudgeInterval int `json:"nudge_interval"`
+	// SkillNudgeInterval is the number of tool iterations within turns
+	// between background skill reviews. 0 disables the skill review trigger.
+	SkillNudgeInterval int `json:"skill_nudge_interval"`
+	MemoryCharLimit    int `json:"memory_char_limit"`
+	UserCharLimit      int `json:"user_char_limit"`
+}
+
+func DefaultMemory() MemorySettings {
+	return MemorySettings{
+		Enabled:            true,
+		UserProfileEnabled: true,
+		NudgeInterval:      10,
+		SkillNudgeInterval: 10,
+		MemoryCharLimit:    2200,
+		UserCharLimit:      1375,
+	}
+}
+
+// CuratorSettings controls the background skill curator (inactivity-triggered,
+// no cron). Deterministic stale/archive transitions plus an LLM review pass
+// over agent-created skills.
+type CuratorSettings struct {
+	Enabled          bool    `json:"enabled"`
+	IntervalHours    int     `json:"interval_hours"`
+	MinIdleHours     float64 `json:"min_idle_hours"`
+	StaleAfterDays   int     `json:"stale_after_days"`
+	ArchiveAfterDays int     `json:"archive_after_days"`
+	PruneBuiltins    bool    `json:"prune_builtins"`
+}
+
+func DefaultCurator() CuratorSettings {
+	return CuratorSettings{
+		Enabled:          true,
+		IntervalHours:    168,
+		MinIdleHours:     2,
+		StaleAfterDays:   30,
+		ArchiveAfterDays: 90,
+		PruneBuiltins:    true,
+	}
+}
+
 // Config holds non-secret settings persisted to disk.
 type Config struct {
 	Endpoint      string              `json:"endpoint"`
@@ -67,6 +117,8 @@ type Config struct {
 	Compaction    *CompactionSettings `json:"compaction,omitempty"`
 	Evidence      *EvidenceConfig     `json:"evidence,omitempty"`
 	Skills        *SkillsSettings     `json:"skills,omitempty"`
+	Memory        *MemorySettings     `json:"memory,omitempty"`
+	Curator       *CuratorSettings    `json:"curator,omitempty"`
 
 	// legacy field — migrated to secrets store on load, never written back
 	apiKeyLegacy string `json:"-"`
@@ -82,6 +134,8 @@ type Runtime struct {
 	Compaction    CompactionSettings
 	Evidence      EvidenceConfig
 	Skills        SkillsSettings
+	Memory        MemorySettings
+	Curator       CuratorSettings
 }
 
 func Default() Config {
@@ -97,6 +151,8 @@ func Default() Config {
 			Enabled:             true,
 			EnableSkillCommands: true,
 		},
+		Memory:  func() *MemorySettings { m := DefaultMemory(); return &m }(),
+		Curator: func() *CuratorSettings { c := DefaultCurator(); return &c }(),
 	}
 }
 
@@ -121,6 +177,8 @@ type fileConfig struct {
 	Compaction    *CompactionSettings `json:"compaction,omitempty"`
 	Evidence      *EvidenceConfig     `json:"evidence,omitempty"`
 	Skills        *SkillsSettings     `json:"skills,omitempty"`
+	Memory        *MemorySettings     `json:"memory,omitempty"`
+	Curator       *CuratorSettings    `json:"curator,omitempty"`
 }
 
 func Load() (Config, error) {
@@ -154,6 +212,12 @@ func Load() (Config, error) {
 					}
 					if raw.Skills != nil {
 						cfg.Skills = raw.Skills
+					}
+					if raw.Memory != nil {
+						cfg.Memory = raw.Memory
+					}
+					if raw.Curator != nil {
+						cfg.Curator = raw.Curator
 					}
 					if cfg.Endpoint == "" {
 						cfg.Endpoint = DefaultEndpoint
@@ -203,6 +267,12 @@ func Load() (Config, error) {
 	}
 	if raw.Skills != nil {
 		cfg.Skills = raw.Skills
+	}
+	if raw.Memory != nil {
+		cfg.Memory = raw.Memory
+	}
+	if raw.Curator != nil {
+		cfg.Curator = raw.Curator
 	}
 
 	if cfg.Endpoint == "" {
@@ -255,6 +325,14 @@ func Save(cfg Config) error {
 			EnableSkillCommands: true,
 		}
 	}
+	if cfg.Memory == nil {
+		m := DefaultMemory()
+		cfg.Memory = &m
+	}
+	if cfg.Curator == nil {
+		c := DefaultCurator()
+		cfg.Curator = &c
+	}
 
 	dir, err := Dir()
 	if err != nil {
@@ -278,6 +356,8 @@ func Save(cfg Config) error {
 		Compaction:    cfg.Compaction,
 		Evidence:      cfg.Evidence,
 		Skills:        cfg.Skills,
+		Memory:        cfg.Memory,
+		Curator:       cfg.Curator,
 	}
 
 	data, err := json.MarshalIndent(raw, "", "  ")
@@ -325,6 +405,16 @@ func LoadRuntime() (Runtime, error) {
 		}
 	}
 
+	mem := DefaultMemory()
+	if cfg.Memory != nil {
+		mem = *cfg.Memory
+	}
+
+	cur := DefaultCurator()
+	if cfg.Curator != nil {
+		cur = *cfg.Curator
+	}
+
 	return Runtime{
 		Endpoint:      cfg.Endpoint,
 		Model:         cfg.Model,
@@ -334,6 +424,8 @@ func LoadRuntime() (Runtime, error) {
 		Compaction:    comp,
 		Evidence:      ev,
 		Skills:        sk,
+		Memory:        mem,
+		Curator:       cur,
 	}, nil
 }
 

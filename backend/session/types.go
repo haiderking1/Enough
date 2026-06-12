@@ -20,6 +20,9 @@ const (
 	TypeCustomMessage       EntryType = "custom_message"
 	TypeLabel               EntryType = "label"
 	TypeSessionInfo         EntryType = "session_info"
+	// TypeSystemPrompt stores the session's cached system prompt so resumed
+	// sessions replay the byte-identical prompt (prefix-cache invariant).
+	TypeSystemPrompt        EntryType = "system_prompt"
 )
 
 type SessionEntry struct {

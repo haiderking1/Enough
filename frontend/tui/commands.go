@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/enough/enough/backend/agent"
 	"github.com/enough/enough/backend/auth"
 	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/core"
+	"github.com/enough/enough/backend/memory"
 	"github.com/enough/enough/backend/skills"
 )
 
@@ -211,6 +213,47 @@ func (a *App) handleSlash(input string) {
 			a.appendMessage("error", msg)
 		}
 		a.requestRender()
+	case "memory":
+		a.showMemory()
+	case "curator-run":
+		a.runCurator(arg)
+	case "curator-status":
+		cfg, err := config.LoadRuntime()
+		if err != nil {
+			a.appendMessage("error", err.Error())
+			return
+		}
+		a.appendMessage("system", skills.CuratorStatusString(cfg.Curator))
+		a.requestRender()
+	case "curator-pin":
+		if arg == "" {
+			a.appendMessage("error", "Usage: /curator-pin <skill>")
+			return
+		}
+		skills.PinSkill(arg)
+		a.appendMessage("system", fmt.Sprintf("Pinned '%s' — the curator will never archive or consolidate it.", arg))
+		a.requestRender()
+	case "curator-unpin":
+		if arg == "" {
+			a.appendMessage("error", "Usage: /curator-unpin <skill>")
+			return
+		}
+		skills.UnpinSkill(arg)
+		a.appendMessage("system", fmt.Sprintf("Unpinned '%s'.", arg))
+		a.requestRender()
+	case "curator-pause":
+		switch strings.ToLower(arg) {
+		case "on":
+			skills.SetCuratorPaused(true)
+			a.appendMessage("system", "Curator paused")
+		case "off":
+			skills.SetCuratorPaused(false)
+			a.appendMessage("system", "Curator resumed")
+		default:
+			a.appendMessage("error", "Usage: /curator-pause on|off")
+			return
+		}
+		a.requestRender()
 	default:
 		if strings.HasPrefix(name, "skill:") {
 			skillName := strings.TrimPrefix(name, "skill:")
@@ -265,6 +308,70 @@ func (a *App) handleSlash(input string) {
 		}
 		a.appendMessage("error", "unknown command: /"+name)
 	}
+}
+
+// showMemory renders the live MEMORY.md / USER.md state.
+func (a *App) showMemory() {
+	cfg, err := config.LoadRuntime()
+	if err != nil {
+		a.appendMessage("error", err.Error())
+		return
+	}
+	if !cfg.Memory.Enabled && !cfg.Memory.UserProfileEnabled {
+		a.appendMessage("system", "Memory is disabled (config.json → memory.memory_enabled)")
+		return
+	}
+	store := memory.NewStore(cfg.Memory.MemoryCharLimit, cfg.Memory.UserCharLimit)
+	store.LoadFromDisk()
+	var lines []string
+	for _, target := range []string{memory.TargetMemory, memory.TargetUser} {
+		res := store.Read(target)
+		label := "MEMORY.md"
+		if target == memory.TargetUser {
+			label = "USER.md"
+		}
+		lines = append(lines, fmt.Sprintf("%s (%s):", label, res.Usage))
+		if len(res.Entries) == 0 {
+			lines = append(lines, "  (empty)")
+		}
+		for _, e := range res.Entries {
+			lines = append(lines, "  § "+strings.ReplaceAll(e, "\n", "\n    "))
+		}
+	}
+	lines = append(lines, "", "Files: ~/.enough/memories/  ·  Identity: ~/.enough/SOUL.md")
+	a.appendMessage("system", strings.Join(lines, "\n"))
+	a.requestRender()
+}
+
+// runCurator handles /curator-run [dry-run].
+func (a *App) runCurator(arg string) {
+	if !auth.Connected() {
+		a.appendMessage("error", "not connected — type / and pick connect")
+		return
+	}
+	cfg, err := config.LoadRuntime()
+	if err != nil {
+		a.appendMessage("error", err.Error())
+		return
+	}
+	dryRun := false
+	switch strings.ToLower(strings.TrimSpace(arg)) {
+	case "":
+	case "dry-run", "--dry-run", "dry":
+		dryRun = true
+	default:
+		a.appendMessage("error", "Usage: /curator-run [dry-run]")
+		return
+	}
+	label := "Curator pass started (summary will appear when done)"
+	if dryRun {
+		label = "Curator dry-run started (report only — no mutations)"
+	}
+	a.appendMessage("system", label)
+	a.requestRender()
+	res := agent.RunCuratorReview(cfg, dryRun, false, a.notifyAsync)
+	a.appendMessage("system", "Curator auto-transitions: "+res.AutoSummary)
+	a.requestRender()
 }
 
 func (a *App) saveAPIKey(key string) {

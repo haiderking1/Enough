@@ -34,4 +34,10 @@ var slashCommands = []slashCommand{
 	{name: "skill-commands", desc: "toggle /skill:<name> autocomplete (on|off)"},
 	{name: "skill-archive", desc: "move a global skill to ~/.enough/skills/.archive/"},
 	{name: "skill-restore", desc: "restore an archived global skill"},
+	{name: "memory", desc: "show persistent memory (MEMORY.md + USER.md)"},
+	{name: "curator-run", desc: "run the skill curator now (add dry-run to preview)"},
+	{name: "curator-status", desc: "show curator state and last run summary"},
+	{name: "curator-pin", desc: "pin a skill so the curator never archives it"},
+	{name: "curator-unpin", desc: "unpin a skill"},
+	{name: "curator-pause", desc: "pause or resume the curator (on|off)"},
 }

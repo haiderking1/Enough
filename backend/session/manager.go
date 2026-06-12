@@ -29,6 +29,11 @@ type Manager struct {
 	leafID  *string
 	flushed bool
 
+	// storedSystemPrompt is the cached system prompt persisted for this
+	// session (TypeSystemPrompt entry). Replayed verbatim on resume so the
+	// upstream prefix cache stays warm.
+	storedSystemPrompt string
+
 	labelsById          map[string]string
 	labelTimestampsById map[string]string
 
@@ -332,9 +337,42 @@ func (m *Manager) newSession() error {
 	m.flushed = false
 	m.sessionFile = filepath.Join(m.sessionDir, fmt.Sprintf("%s_%s.jsonl", fileTimestamp(ts), m.sessionID))
 	m.flushed = false
+	m.storedSystemPrompt = ""
 	m.labelsById = make(map[string]string)
 	m.labelTimestampsById = make(map[string]string)
 	return nil
+}
+
+// StoredSystemPrompt returns the cached system prompt persisted for this
+// session, or "" when none was stored.
+func (m *Manager) StoredSystemPrompt() string {
+	return m.storedSystemPrompt
+}
+
+// SetSystemPrompt persists the session's cached system prompt. The entry does
+// not advance the message leaf (same pattern as labels), so it never enters
+// the LLM context — it is metadata replayed as the system message on resume.
+func (m *Manager) SetSystemPrompt(prompt string) error {
+	if prompt == m.storedSystemPrompt {
+		return nil
+	}
+	id := newID()
+	entry := FileEntry{
+		SessionEntry: SessionEntry{
+			Type:      TypeSystemPrompt,
+			ID:        id,
+			ParentID:  m.leafID,
+			Timestamp: nowISO(),
+			Content:   prompt,
+		},
+	}
+	raw, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	m.entries = append(m.entries, raw)
+	m.storedSystemPrompt = prompt
+	return m.persistEntry(raw, false)
 }
 
 func (m *Manager) openFile(path string) error {
@@ -379,9 +417,15 @@ func (m *Manager) openFile(path string) error {
 	for _, raw := range entries[1:] {
 		var entry FileEntry
 		if json.Unmarshal(raw, &entry) == nil && entry.Type != TypeSession && entry.ID != "" {
-			// Don't set leafID to TypeLabel or TypeSessionInfo as active message leaf
-			if entry.Type != TypeLabel && entry.Type != TypeSessionInfo {
+			// Don't set leafID to TypeLabel, TypeSessionInfo or
+			// TypeSystemPrompt as active message leaf
+			if entry.Type != TypeLabel && entry.Type != TypeSessionInfo && entry.Type != TypeSystemPrompt {
 				m.leafID = &entry.ID
+			}
+			if entry.Type == TypeSystemPrompt {
+				if s, ok := entry.Content.(string); ok {
+					m.storedSystemPrompt = s
+				}
 			}
 			if entry.Type == TypeLabel {
 				if entry.Label != "" {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/enough/enough/backend/core"
 	"github.com/enough/enough/backend/opencode"
@@ -190,6 +191,7 @@ func (a *Agent) Compact(ctx context.Context, customInstructions string) (*sessio
 		return nil, err
 	}
 
+	summary = a.appendMemoryAuthorityNote(summary)
 	err := a.session.AppendCompaction(summary, firstKeptEntryID, tokensBefore, details, fromExt)
 	if err != nil {
 		a.emitCompactionEnd("manual", nil, false, false, err.Error())
@@ -197,6 +199,9 @@ func (a *Agent) Compact(ctx context.Context, customInstructions string) (*sessio
 	}
 
 	a.mu.Lock()
+	// Compaction is a rebuild boundary: refresh the memory snapshot and the
+	// cached system prompt before reloading the transcript.
+	a.invalidateSystemPrompt()
 	a.ReloadMessagesFromSession()
 	a.mu.Unlock()
 
@@ -225,6 +230,24 @@ func (a *Agent) Compact(ctx context.Context, customInstructions string) (*sessio
 	}
 	a.emitCompactionEnd("manual", compactionResult, false, false, "")
 	return compactionResult, nil
+}
+
+// memoryAuthorityNote is appended to compaction summaries when persistent
+// memory is enabled, so the model never treats a compacted transcript as
+// overriding its memory snapshot.
+const memoryAuthorityNote = "Your persistent memory (MEMORY.md, USER.md) in the system prompt remains fully authoritative regardless of compaction."
+
+func (a *Agent) appendMemoryAuthorityNote(summary string) string {
+	if summary == "" {
+		return summary
+	}
+	if !a.cfg.Memory.Enabled && !a.cfg.Memory.UserProfileEnabled {
+		return summary
+	}
+	if strings.Contains(summary, memoryAuthorityNote) {
+		return summary
+	}
+	return summary + "\n\n" + memoryAuthorityNote
 }
 
 func (a *Agent) RunAutoCompaction(ctx context.Context, reason string, willRetry bool) (bool, error) {
@@ -311,6 +334,7 @@ func (a *Agent) RunAutoCompaction(ctx context.Context, reason string, willRetry 
 		return false, nil
 	}
 
+	summary = a.appendMemoryAuthorityNote(summary)
 	err := a.session.AppendCompaction(summary, firstKeptEntryID, tokensBefore, details, fromExt)
 	if err != nil {
 		a.emitCompactionEnd(reason, nil, false, false, err.Error())
@@ -318,6 +342,9 @@ func (a *Agent) RunAutoCompaction(ctx context.Context, reason string, willRetry 
 	}
 
 	a.mu.Lock()
+	// Compaction is a rebuild boundary: refresh the memory snapshot and the
+	// cached system prompt before reloading the transcript.
+	a.invalidateSystemPrompt()
 	a.ReloadMessagesFromSession()
 	a.mu.Unlock()
 
