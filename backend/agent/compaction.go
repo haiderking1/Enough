@@ -49,8 +49,8 @@ func IsContextOverflowError(err error) bool {
 	return false
 }
 
-func GetContextWindow(model string) int {
-	return ModelContextWindow(model, 0)
+func GetContextWindow(provider, model string) int {
+	return ModelContextWindow(provider, model, 0)
 }
 
 func (a *Agent) ReloadMessagesFromSession() {
@@ -458,7 +458,7 @@ func (a *Agent) NavigateToEntry(ctx context.Context, targetID string, opts Navig
 
 	if opts.Summarize && len(prepResult.Entries) > 0 && extSummary == nil {
 		// Generate branch summary using LLM
-		contextWindow := ModelContextWindow(a.cfg.Model, a.cfg.Compaction.ContextWindow)
+		contextWindow := ModelContextWindow(a.cfg.Provider, a.cfg.Model, a.cfg.Compaction.ContextWindow)
 		reserveTokens := a.cfg.Compaction.ReserveTokens
 		if reserveTokens <= 0 {
 			reserveTokens = 16384

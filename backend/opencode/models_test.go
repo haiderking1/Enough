@@ -62,3 +62,37 @@ func TestFormatContextWindow(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestResolveContextWindowCodex(t *testing.T) {
+	if got := ResolveContextWindow(ProviderCodex, "gpt-5.3-codex"); got != 272_000 {
+		t.Fatalf("codex context = %d, want 272000", got)
+	}
+	if got := ResolveContextWindow(ProviderCodex, "gpt-5.3-codex-spark"); got != 128_000 {
+		t.Fatalf("spark context = %d, want 128000", got)
+	}
+	if got := ResolveContextWindow(ProviderOpenCode, "gpt-5-codex"); got != 128_000 {
+		t.Fatalf("codex model on opencode provider = %d, want 128000 fallback", got)
+	}
+}
+
+func TestRegistryRefreshCodex(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"models":[
+			{"slug":"gpt-5-codex","title":"GPT-5 Codex","context_window":272000,"visibility":"visible","priority":1},
+			{"slug":"gpt-5.3-codex-spark","title":"Spark","context_window":128000,"visibility":"visible","priority":2}
+		]}`))
+	}))
+	defer srv.Close()
+
+	orig := codexModelsURL
+	codexModelsURL = srv.URL
+	defer func() { codexModelsURL = orig }()
+
+	r := NewRegistry()
+	if err := r.RefreshCodex(context.Background(), "test-token"); err != nil {
+		t.Fatalf("RefreshCodex: %v", err)
+	}
+	if got := r.resolveContextWindow(ProviderCodex, "gpt-5-codex"); got != 272_000 {
+		t.Fatalf("live codex context = %d", got)
+	}
+}

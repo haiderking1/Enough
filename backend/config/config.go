@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,13 +9,18 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/enough/enough/backend/auth"
 	"github.com/enough/enough/backend/enoughhome"
 	"github.com/enough/enough/backend/secrets"
 )
 
 const (
-	DefaultEndpoint = "https://opencode.ai/zen/go/v1"
-	DefaultModel    = "deepseek-v4-flash"
+	DefaultEndpoint   = "https://opencode.ai/zen/go/v1"
+	DefaultModel      = "deepseek-v4-flash"
+	DefaultCodexModel = "gpt-5-codex"
+
+	ProviderOpenCode = "opencode-go"
+	ProviderCodex    = "openai-codex"
 )
 
 type CompactionSettings struct {
@@ -127,6 +133,7 @@ func DefaultCurator() CuratorSettings {
 
 // Config holds non-secret settings persisted to disk.
 type Config struct {
+	Provider      string              `json:"provider,omitempty"`
 	Endpoint      string              `json:"endpoint"`
 	Model         string              `json:"model"`
 	ThinkingLevel string              `json:"thinking_level,omitempty"`
@@ -145,6 +152,7 @@ type Config struct {
 
 // Runtime bundles config with the in-memory API key (never saved to config.json).
 type Runtime struct {
+	Provider      string
 	Endpoint      string
 	Model         string
 	APIKey        string
@@ -213,6 +221,7 @@ func Path() (string, error) {
 }
 
 type fileConfig struct {
+	Provider      string              `json:"provider,omitempty"`
 	Endpoint      string              `json:"endpoint"`
 	Model         string              `json:"model"`
 	ThinkingLevel string              `json:"thinking_level,omitempty"`
@@ -245,6 +254,7 @@ func Load() (Config, error) {
 			if err == nil {
 				var raw fileConfig
 				if err := json.Unmarshal(oldData, &raw); err == nil {
+					cfg.Provider = raw.Provider
 					cfg.Endpoint = raw.Endpoint
 					cfg.Model = raw.Model
 					cfg.ThinkingLevel = raw.ThinkingLevel
@@ -316,6 +326,7 @@ func Load() (Config, error) {
 		return cfg, fmt.Errorf("parse config: %w", err)
 	}
 
+	cfg.Provider = raw.Provider
 	cfg.Endpoint = raw.Endpoint
 	cfg.Model = raw.Model
 	cfg.ThinkingLevel = raw.ThinkingLevel
@@ -343,6 +354,9 @@ func Load() (Config, error) {
 		cfg.Plugins = raw.Plugins
 	}
 
+	if cfg.Provider == "" {
+		cfg.Provider = ProviderOpenCode
+	}
 	if cfg.Endpoint == "" {
 		cfg.Endpoint = DefaultEndpoint
 	}
@@ -474,6 +488,7 @@ func Save(cfg Config) error {
 	}
 
 	raw := fileConfig{
+		Provider:      cfg.Provider,
 		Endpoint:      cfg.Endpoint,
 		Model:         cfg.Model,
 		ThinkingLevel: cfg.ThinkingLevel,
@@ -500,9 +515,30 @@ func LoadRuntime() (Runtime, error) {
 		return Runtime{}, err
 	}
 
-	key, err := secrets.GetAPIKey()
-	if err != nil {
-		return Runtime{}, err
+	provider := cfg.Provider
+	if provider == "" {
+		provider = ProviderOpenCode
+	}
+
+	var key string
+	switch provider {
+	case ProviderCodex:
+		creds, err := auth.ResolveCodexCredentials(context.Background())
+		if err != nil {
+			return Runtime{}, err
+		}
+		key = creds.AccessToken
+		if cfg.Endpoint == "" || cfg.Endpoint == DefaultEndpoint {
+			cfg.Endpoint = creds.BaseURL
+		}
+	default:
+		key, err = secrets.GetAPIKey()
+		if err != nil {
+			return Runtime{}, err
+		}
+		if cfg.Endpoint == "" {
+			cfg.Endpoint = DefaultEndpoint
+		}
 	}
 
 	var comp CompactionSettings
@@ -564,6 +600,7 @@ func LoadRuntime() (Runtime, error) {
 	}
 
 	return Runtime{
+		Provider:      provider,
 		Endpoint:      cfg.Endpoint,
 		Model:         cfg.Model,
 		APIKey:        key,
@@ -580,5 +617,16 @@ func LoadRuntime() (Runtime, error) {
 }
 
 func Connected() bool {
+	cfg, err := Load()
+	if err != nil {
+		return false
+	}
+	provider := cfg.Provider
+	if provider == "" {
+		provider = ProviderOpenCode
+	}
+	if provider == ProviderCodex {
+		return auth.HasCodexAuth()
+	}
 	return secrets.HasAPIKey()
 }

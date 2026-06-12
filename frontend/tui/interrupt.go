@@ -35,12 +35,13 @@ func (a *App) handleInterrupt() {
 		a.dismissModelPicker()
 		return
 	}
+	if a.mode == modeConnectPicker || a.mode == modeConnect || a.mode == modeConnectCodex {
+		a.cancelConnect()
+		return
+	}
 	if a.slashActive() {
 		a.dismissSlashMenu()
 		return
-	}
-	if a.mode == modeConnect {
-		a.cancelConnect()
 	}
 }
 

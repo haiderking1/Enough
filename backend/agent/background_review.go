@@ -445,7 +445,7 @@ func (a *Agent) runBackgroundReview(
 
 	review := &Agent{
 		cfg:                childCfg,
-		client:             opencode.NewClient(childCfg.Endpoint, childCfg.APIKey, childCfg.Model),
+		client:             opencode.NewClientForRuntime(childCfg),
 		workDir:            a.workDir,
 		session:            nil,
 		allowedTools:       reviewToolWhitelist,

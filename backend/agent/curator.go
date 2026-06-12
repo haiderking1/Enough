@@ -313,7 +313,7 @@ func runCuratorLLMPass(cfg config.Runtime, dryRun bool, prefix, autoSummary stri
 
 	curator := &Agent{
 		cfg:           childCfg,
-		client:        opencode.NewClient(childCfg.Endpoint, childCfg.APIKey, childCfg.Model),
+		client:        opencode.NewClientForRuntime(childCfg),
 		workDir:       skills.SkillsDir(),
 		session:       nil,
 		allowedTools:  curatorToolWhitelist,

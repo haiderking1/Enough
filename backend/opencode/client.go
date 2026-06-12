@@ -15,6 +15,7 @@ type Client struct {
 	baseURL    string
 	apiKey     string
 	model      string
+	codex      bool
 	httpClient *http.Client
 }
 
@@ -29,6 +30,13 @@ func NewClient(baseURL, apiKey, model string) *Client {
 	}
 }
 
+// NewCodexClient creates a client for the ChatGPT Codex Responses API.
+func NewCodexClient(baseURL, accessToken, model string) *Client {
+	c := NewClient(baseURL, accessToken, model)
+	c.codex = true
+	return c
+}
+
 func (c *Client) withoutTimeout() *Client {
 	cp := *c
 	if c.httpClient != nil {
@@ -40,6 +48,13 @@ func (c *Client) withoutTimeout() *Client {
 }
 
 func (c *Client) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+	if c.codex {
+		msg, err := c.chatResponsesOnce(ctx, req)
+		if err != nil {
+			return ChatResponse{}, err
+		}
+		return ChatResponse{Choices: []Choice{{Message: msg, FinishReason: "stop"}}}, nil
+	}
 	if req.Model == "" {
 		req.Model = c.model
 	}

@@ -1,10 +1,10 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
-	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/secrets"
 )
 
@@ -17,16 +17,15 @@ func SaveAPIKey(key string) error {
 	return secrets.SetAPIKey(key)
 }
 
-// Settings returns non-secret connection settings.
-func Settings() (endpoint, model string, err error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return "", "", err
+// Connected reports whether any credentials are stored.
+func Connected() bool {
+	if secrets.HasAPIKey() {
+		return true
 	}
-	return cfg.Endpoint, cfg.Model, nil
+	return HasCodexAuth()
 }
 
-// Connected reports whether an API key is stored.
-func Connected() bool {
-	return config.Connected()
+// AddOpenAICodex runs browser OAuth and saves Codex credentials to auth.json.
+func AddOpenAICodex(ctx context.Context) (DeviceAuthStart, error) {
+	return CompleteCodexDeviceLogin(ctx)
 }

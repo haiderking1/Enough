@@ -107,7 +107,7 @@ func New(cfg config.Runtime, workDir string, sm *session.Manager) *Agent {
 
 	a := &Agent{
 		cfg:         cfg,
-		client:      opencode.NewClient(cfg.Endpoint, cfg.APIKey, cfg.Model),
+		client:      opencode.NewClientForRuntime(cfg),
 		workDir:     workDir,
 		session:     sm,
 		writeOrigin: WriteOriginForeground,
@@ -290,7 +290,7 @@ func (a *Agent) applyConfigLocked(cfg config.Runtime) {
 	promptAffecting := !reflect.DeepEqual(a.cfg.Memory, cfg.Memory) ||
 		!reflect.DeepEqual(a.cfg.Skills, cfg.Skills)
 	a.cfg = cfg
-	a.client = opencode.NewClient(cfg.Endpoint, cfg.APIKey, cfg.Model)
+	a.client = opencode.NewClientForRuntime(cfg)
 	if promptAffecting {
 		a.initMemoryStore()
 		a.invalidateSystemPrompt()
@@ -412,7 +412,7 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 		}
 
 		if !skip {
-			contextWindow := ModelContextWindow(a.cfg.Model, a.cfg.Compaction.ContextWindow)
+			contextWindow := ModelContextWindow(a.cfg.Provider, a.cfg.Model, a.cfg.Compaction.ContextWindow)
 			sessionMsgs := a.session.BuildSessionContext().Messages
 			tokens := session.EstimateContextTokens(sessionMsgs).Tokens
 			if session.ShouldCompact(tokens, contextWindow, a.cfg.Compaction) {
@@ -616,7 +616,7 @@ func (a *Agent) runLoop(ctx context.Context) error {
 				}
 
 				if !skip {
-					contextWindow := ModelContextWindow(a.cfg.Model, a.cfg.Compaction.ContextWindow)
+					contextWindow := ModelContextWindow(a.cfg.Provider, a.cfg.Model, a.cfg.Compaction.ContextWindow)
 					var tokens int
 					if msg.Usage != nil {
 						tokens = session.CalculateContextTokens(*msg.Usage)

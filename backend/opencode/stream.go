@@ -129,6 +129,9 @@ func isRetriableStreamError(err error) bool {
 }
 
 func (c *Client) chatStreamOnce(ctx context.Context, req ChatRequest, cb StreamCallbacks) (Message, error) {
+	if c.codex {
+		return c.chatResponsesStreamOnce(ctx, req, cb)
+	}
 	if req.Model == "" {
 		req.Model = c.model
 	}

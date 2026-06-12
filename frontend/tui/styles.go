@@ -205,3 +205,7 @@ func thinkingBorderColor(level string) lipgloss.Color {
 		return lipgloss.Color("#2a2a34")
 	}
 }
+
+func connectBorderColor() lipgloss.Color {
+	return lipgloss.Color("#22d3ee")
+}

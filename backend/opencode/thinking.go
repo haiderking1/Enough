@@ -1,12 +1,15 @@
 package opencode
 
-// ThinkingLevel controls model reasoning effort (Flame-compatible).
+// ThinkingLevel controls model reasoning effort (OpenCode + Codex + Responses API).
 type ThinkingLevel string
 
 const (
-	ThinkingOff   ThinkingLevel = "off"
-	ThinkingHigh  ThinkingLevel = "high"
-	ThinkingXHigh ThinkingLevel = "xhigh"
+	ThinkingOff    ThinkingLevel = "off"
+	ThinkingMinimal ThinkingLevel = "minimal"
+	ThinkingLow    ThinkingLevel = "low"
+	ThinkingMedium ThinkingLevel = "medium"
+	ThinkingHigh   ThinkingLevel = "high"
+	ThinkingXHigh  ThinkingLevel = "xhigh"
 )
 
 type ThinkingParams struct {
@@ -16,21 +19,26 @@ type ThinkingParams struct {
 // deepseekV4FlashLevels matches Flame's opencode-go deepseek-v4-flash thinkingLevelMap.
 var deepseekV4FlashLevels = []ThinkingLevel{ThinkingOff, ThinkingHigh, ThinkingXHigh}
 
+// defaultReasoningLevels is the standard OpenAI/Codex reasoning effort ladder.
+var defaultReasoningLevels = []ThinkingLevel{
+	ThinkingOff, ThinkingMinimal, ThinkingLow, ThinkingMedium, ThinkingHigh, ThinkingXHigh,
+}
+
 func SupportsThinking(model string) bool {
-	if m, ok := LookupModel(model); ok {
-		return len(m.ThinkingLevels) > 1
-	}
-	return SupportsThinkingLevels(model)
+	return len(SupportedThinkingLevels(model)) > 1
 }
 
 func SupportedThinkingLevels(model string) []ThinkingLevel {
-	if m, ok := LookupModel(model); ok && len(m.ThinkingLevels) > 0 {
+	if m, ok := LookupCatalogModel(model); ok && len(m.ThinkingLevels) > 1 {
 		return append([]ThinkingLevel(nil), m.ThinkingLevels...)
 	}
-	if !SupportsThinkingLevels(model) {
-		return []ThinkingLevel{ThinkingOff}
+	if SupportsThinkingLevels(model) {
+		return append([]ThinkingLevel(nil), deepseekV4FlashLevels...)
 	}
-	return append([]ThinkingLevel(nil), deepseekV4FlashLevels...)
+	if m, ok := LookupCatalogModel(model); ok && m.Reasoning {
+		return append([]ThinkingLevel(nil), defaultReasoningLevels...)
+	}
+	return []ThinkingLevel{ThinkingOff}
 }
 
 func CycleThinkingLevel(current ThinkingLevel, model string) ThinkingLevel {
@@ -48,21 +56,59 @@ func CycleThinkingLevel(current ThinkingLevel, model string) ThinkingLevel {
 	return levels[(idx+1)%len(levels)]
 }
 
+func StepThinkingLevel(current ThinkingLevel, model string, delta int) ThinkingLevel {
+	levels := SupportedThinkingLevels(model)
+	if len(levels) <= 1 {
+		return ThinkingOff
+	}
+	idx := 0
+	for i, l := range levels {
+		if l == current {
+			idx = i
+			break
+		}
+	}
+	n := len(levels)
+	idx = ((idx+delta)%n + n) % n
+	return levels[idx]
+}
+
 func ApplyThinkingToRequest(req *ChatRequest, level ThinkingLevel, model string) {
 	if !SupportsThinking(model) {
 		return
 	}
 	if level == ThinkingOff || level == "" {
 		req.Thinking = &ThinkingParams{Type: "disabled"}
+		req.ReasoningEffort = ""
 		return
 	}
-	req.Thinking = &ThinkingParams{Type: "enabled"}
-	switch level {
-	case ThinkingXHigh:
-		req.ReasoningEffort = "max"
-	default:
-		req.ReasoningEffort = "high"
+
+	effort := ReasoningEffortForAPI(level, model)
+	if SupportsThinkingLevels(model) {
+		req.Thinking = &ThinkingParams{Type: "enabled"}
+		req.ReasoningEffort = effort
+		return
 	}
+
+	req.ReasoningEffort = effort
+}
+
+// ReasoningEffortForAPI maps UI thinking levels to provider wire values.
+func ReasoningEffortForAPI(level ThinkingLevel, model string) string {
+	if level == ThinkingOff || level == "" {
+		return ""
+	}
+	if SupportsThinkingLevels(model) {
+		switch level {
+		case ThinkingXHigh:
+			return "max"
+		case ThinkingHigh:
+			return "high"
+		default:
+			return string(level)
+		}
+	}
+	return string(level)
 }
 
 // NormalizeMessages ensures assistant messages include reasoning_content when required.
@@ -86,9 +132,16 @@ func NormalizeMessages(msgs []Message, model string) []Message {
 
 func ParseThinkingLevel(s string) ThinkingLevel {
 	switch ThinkingLevel(s) {
-	case ThinkingHigh, ThinkingXHigh:
+	case ThinkingMinimal, ThinkingLow, ThinkingMedium, ThinkingHigh, ThinkingXHigh:
 		return ThinkingLevel(s)
 	default:
 		return ThinkingOff
 	}
+}
+
+func FormatThinkingLabel(level ThinkingLevel) string {
+	if level == "" || level == ThinkingOff {
+		return "off"
+	}
+	return string(level)
 }

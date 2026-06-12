@@ -26,16 +26,7 @@ func (a *App) handleSlash(input string) {
 			a.saveAPIKey(arg)
 			return
 		}
-		a.mode = modeConnect
-		a.editor = NewEditor(1024)
-		endpoint, model, err := auth.Settings()
-		if err != nil {
-			a.appendMessage("error", err.Error())
-			a.mode = modeTask
-			a.editor = NewEditor(512)
-			return
-		}
-		a.appendMessage("system", fmt.Sprintf("connect — %s · %s\npaste your api key below", endpoint, model))
+		a.openConnectPicker()
 	case "sessions":
 		a.showSessionsList()
 	case "resume":
@@ -616,10 +607,15 @@ func (a *App) runCurator(arg string) {
 }
 
 func (a *App) saveAPIKey(key string) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		a.appendMessage("error", "api key cannot be empty")
+		return
+	}
 	a.mode = modeTask
 	a.editor = NewEditor(512)
 
-	if err := auth.SaveAPIKey(key); err != nil {
+	if err := config.EnableOpenCodeProvider(key); err != nil {
 		a.appendMessage("error", err.Error())
 		return
 	}
@@ -637,10 +633,20 @@ func (a *App) saveAPIKey(key string) {
 }
 
 func (a *App) cancelConnect() {
-	if a.mode == modeConnect {
+	switch a.mode {
+	case modeConnect, modeConnectPicker:
 		a.mode = modeTask
 		a.editor = NewEditor(512)
 		a.editor.SetValue("")
+		a.connectPickerStatus = ""
+		a.appendMessage("system", "connect cancelled")
+	case modeConnectCodex:
+		if a.codexOAuthCancel != nil {
+			a.codexOAuthCancel()
+		}
+		a.mode = modeTask
+		a.editor = NewEditor(512)
+		a.connectPickerStatus = ""
 		a.appendMessage("system", "connect cancelled")
 	}
 }
