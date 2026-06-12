@@ -4,6 +4,25 @@ import "fmt"
 
 const toolIncompleteMsg = "Error: tool call was not completed"
 
+// StripResponseFields removes response-only metadata before sending messages to
+// the provider. OpenCode Go rejects requests that include usage on messages.
+func StripResponseFields(msgs []Message) []Message {
+	if len(msgs) == 0 {
+		return msgs
+	}
+	out := make([]Message, len(msgs))
+	for i, msg := range msgs {
+		msg.Usage = nil
+		out[i] = msg
+	}
+	return out
+}
+
+// PrepareRequestMessages sanitizes session history for chat/completions requests.
+func PrepareRequestMessages(msgs []Message, model string) []Message {
+	return RepairToolMessages(NormalizeMessages(StripResponseFields(msgs), model))
+}
+
 // RepairToolMessages ensures every assistant tool_call has a matching tool response.
 // OpenAI-compatible APIs reject requests when tool_calls are missing replies.
 func RepairToolMessages(msgs []Message) []Message {

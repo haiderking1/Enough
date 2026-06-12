@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/enough/enough/frontend/tui/highlight"
+	"github.com/enough/enough/frontend/tui/markdown"
 	"github.com/enough/enough/frontend/tui/term"
 )
 
@@ -183,7 +184,7 @@ func hashMsg(h uint64, m chatMsg) uint64 {
 // chatBlockSpecs groups messages into blocks (matching renderChat's grouping)
 // without rendering them. width/hideThinking/expandTools are folded into each
 // fp so a change in those invalidates every block.
-func chatBlockSpecs(styles Styles, messages []chatMsg, width int, hideThinking, expandTools bool, toolSpinnerFrame int) []chatBlockSpec {
+func chatBlockSpecs(styles Styles, messages []chatMsg, width int, hideThinking, expandTools bool, toolSpinnerFrame int, mdOpts markdown.RenderOptions) []chatBlockSpec {
 	contentW := width - 2
 	var specs []chatBlockSpec
 
@@ -208,7 +209,7 @@ func chatBlockSpecs(styles Styles, messages []chatMsg, width int, hideThinking, 
 		case "assistant":
 			m := msg
 			add("assistant", hashMsg(seed, m), func() string {
-				return renderAssistant(styles, m, contentW, hideThinking)
+				return renderAssistant(styles, m, contentW, hideThinking, mdOpts)
 			})
 		case "tool":
 			var group []chatMsg
@@ -269,7 +270,7 @@ func renderChat(styles Styles, messages []chatMsg, width int, hideThinking, expa
 		width = 80
 	}
 
-	specs := chatBlockSpecs(styles, messages, width, hideThinking, expandTools, 0)
+	specs := chatBlockSpecs(styles, messages, width, hideThinking, expandTools, 0, markdown.RenderOptions{})
 	var blocks []string
 	var roles []string
 	for _, spec := range specs {
@@ -319,7 +320,7 @@ func renderUser(styles Styles, text string, width int) string {
 	return out.String()
 }
 
-func renderAssistant(styles Styles, msg chatMsg, width int, hideThinking bool) string {
+func renderAssistant(styles Styles, msg chatMsg, width int, hideThinking bool, mdOpts markdown.RenderOptions) string {
 	var parts []string
 
 	if strings.TrimSpace(msg.thinking) != "" {
@@ -331,11 +332,11 @@ func renderAssistant(styles Styles, msg chatMsg, width int, hideThinking bool) s
 	}
 
 	if strings.TrimSpace(msg.text) != "" {
-		parts = append(parts, renderAssistantText(styles, msg.text, contentWidth(width)))
+		parts = append(parts, renderAssistantText(styles, msg.text, contentWidth(width), mdOpts))
 	}
 
 	if len(parts) == 0 {
-		return renderAssistantText(styles, msg.text, contentWidth(width))
+		return renderAssistantText(styles, msg.text, contentWidth(width), mdOpts)
 	}
 	return strings.Join(parts, "\n\n")
 }
@@ -364,31 +365,81 @@ func renderThinkingBody(styles Styles, thinking string, width int) string {
 	return out.String()
 }
 
-func renderAssistantText(styles Styles, text string, width int) string {
-	body := highlight.Render(text, width, highlight.TextStyle{
-		Plain: func(line string) string {
-			return styles.AssistText.Render(line)
-		},
-		Bold: func(line string) string {
-			return styles.AssistText.Copy().Bold(true).Render(line)
-		},
-		Italic: func(line string) string {
-			return styles.AssistText.Copy().Italic(true).Render(line)
-		},
-	})
+func renderAssistantText(styles Styles, text string, width int, mdOpts markdown.RenderOptions) string {
+	body := markdown.Render(text, width, assistantMarkdownTheme(styles), mdOpts)
 	if body == "" {
 		return ""
 	}
 
 	lines := strings.Split(body, "\n")
 	var out strings.Builder
-	out.WriteString(styles.AssistBullet.Render("● "))
-	out.WriteString(lines[0])
-
-	for _, line := range lines[1:] {
-		out.WriteString("\n")
-		out.WriteString("  ")
+	for i, line := range lines {
+		if i > 0 {
+			out.WriteString("\n")
+		}
+		if markdown.IsImageLine(line) {
+			out.WriteString(line)
+			continue
+		}
+		if i == 0 {
+			out.WriteString(styles.AssistBullet.Render("● "))
+		} else {
+			out.WriteString("  ")
+		}
 		out.WriteString(line)
 	}
 	return out.String()
+}
+
+func assistantMarkdownTheme(styles Styles) markdown.Theme {
+	p := highlight.GruvboxDark()
+	return markdown.Theme{
+		Plain: func(s string) string {
+			return styles.AssistText.Render(s)
+		},
+		Bold: func(s string) string {
+			return styles.AssistText.Copy().Bold(true).Render(s)
+		},
+		Italic: func(s string) string {
+			return styles.AssistText.Copy().Italic(true).Render(s)
+		},
+		Code: func(s string) string {
+			return p.InlineCode(s)
+		},
+		Link: func(s string) string {
+			return styles.LogAccent.Render(s)
+		},
+		LinkURL: func(s string) string {
+			return styles.LogDim.Render(s)
+		},
+		Heading: func(s string) string {
+			return styles.AssistText.Copy().Bold(true).Render(s)
+		},
+		Quote: func(s string) string {
+			return styles.AssistText.Copy().Italic(true).Render(s)
+		},
+		QuoteBorder: func(s string) string {
+			return styles.LogDim.Render(s)
+		},
+		HR: func(s string) string {
+			return styles.LogDim.Render(s)
+		},
+		ListBullet: func(s string) string {
+			return styles.LogAccent.Render(s)
+		},
+		Image: func(s string) string {
+			return styles.LogDim.Render(s)
+		},
+		CodeBlockBorder: func(s string) string {
+			return p.Paint(p.Special, s)
+		},
+		CodeBlockIndent: "  ",
+		HighlightCode: func(lang, code string) []string {
+			out := highlight.HighlightCode(lang, code, p)
+			if out == "" {
+				return nil
+			}
+			return strings.Split(out, "\n")
+		},
+	}
 }

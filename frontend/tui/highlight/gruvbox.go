@@ -38,6 +38,22 @@ func fg(r, g, b byte) string {
 	return fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)
 }
 
+func (p Palette) Paint(color, text string) string {
+	return p.paint(color, text)
+}
+
+func (p Palette) Bold(text string) string {
+	return p.bold(text)
+}
+
+func (p Palette) Italic(text string) string {
+	return p.italic(text)
+}
+
+func (p Palette) InlineCode(text string) string {
+	return p.inlineCode(text)
+}
+
 func (p Palette) paint(color, text string) string {
 	if text == "" {
 		return ""

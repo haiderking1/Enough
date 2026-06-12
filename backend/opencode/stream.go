@@ -134,7 +134,7 @@ func (c *Client) chatStreamOnce(ctx context.Context, req ChatRequest, cb StreamC
 	}
 	req.Stream = true
 	req.StreamOptions = &StreamOptions{IncludeUsage: true}
-	req.Messages = RepairToolMessages(NormalizeMessages(req.Messages, req.Model))
+	req.Messages = PrepareRequestMessages(req.Messages, req.Model)
 
 	body, err := json.Marshal(req)
 	if err != nil {

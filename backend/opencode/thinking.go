@@ -17,16 +17,17 @@ type ThinkingParams struct {
 var deepseekV4FlashLevels = []ThinkingLevel{ThinkingOff, ThinkingHigh, ThinkingXHigh}
 
 func SupportsThinking(model string) bool {
-	switch model {
-	case "deepseek-v4-flash", "deepseek-v4-pro":
-		return true
-	default:
-		return false
+	if m, ok := LookupModel(model); ok {
+		return len(m.ThinkingLevels) > 1
 	}
+	return SupportsThinkingLevels(model)
 }
 
 func SupportedThinkingLevels(model string) []ThinkingLevel {
-	if !SupportsThinking(model) {
+	if m, ok := LookupModel(model); ok && len(m.ThinkingLevels) > 0 {
+		return append([]ThinkingLevel(nil), m.ThinkingLevels...)
+	}
+	if !SupportsThinkingLevels(model) {
 		return []ThinkingLevel{ThinkingOff}
 	}
 	return append([]ThinkingLevel(nil), deepseekV4FlashLevels...)
