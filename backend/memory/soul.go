@@ -11,17 +11,19 @@ import (
 
 // SOUL.md — the agent's primary identity. When present, its content becomes
 // the first stable block of the system prompt, replacing the default Enough
-// persona. The Enough identity-lockdown rules always remain in force around
-// it (SOUL wraps the persona, never the anti-disclosure policy).
+// persona. disclosurePolicy (anti base-model disclosure) always follows SOUL;
+// it does not override the user's chosen name or persona.
 
 const soulMaxChars = 24000
 
 // DefaultSoul is seeded on first run when ~/.enough/SOUL.md is missing. It is
 // user-editable; edits take effect on the next session.
-const DefaultSoul = `# SOUL.md — Enough's identity
+const DefaultSoul = `# SOUL.md — agent identity
 
-This file is Enough's primary identity. Edit it to shape how the agent
-presents itself and behaves. Changes take effect on the next session.
+This file is your primary identity. Edit it to change your display name,
+persona, and tone. Changes take effect on the next session (/new).
+
+Replace "Enough" below with any name you prefer (e.g. smoke).
 
 ---
 

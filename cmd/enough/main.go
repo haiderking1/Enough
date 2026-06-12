@@ -15,9 +15,15 @@ import (
 )
 
 func main() {
-	// 1. Route `enough skills ...` command
+	skills.EnsureBootstrapped()
+
+	// 1. Route subcommands
 	if len(os.Args) >= 2 && os.Args[1] == "skills" {
 		runSkillsCLI()
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "curator" {
+		runCuratorCLI()
 		return
 	}
 

@@ -125,15 +125,15 @@ func TestBackgroundDeleteArchivesInsteadOfRemoving(t *testing.T) {
 		t.Fatalf("usage record should be archived, got %q", rec.State)
 	}
 
-	// Protected builtin refused outright.
-	enoughDir := filepath.Join(skills.SkillsDir(), "enough")
+	// Protected builtin refused outright (legacy alias names resolve too).
+	enoughDir := filepath.Join(skills.SkillsDir(), "enough-agent")
 	_ = os.MkdirAll(enoughDir, 0o700)
-	_ = os.WriteFile(filepath.Join(enoughDir, "SKILL.md"), []byte("---\nname: enough\ndescription: e\n---\n\nBody.\n"), 0o600)
+	_ = os.WriteFile(filepath.Join(enoughDir, "SKILL.md"), []byte("---\nname: enough-agent\ndescription: e\n---\n\nBody.\n"), 0o600)
 	if res := bg.toolSkillManage(`{"action":"delete","name":"enough"}`); !res.isErr || !strings.Contains(res.output, "protected") {
 		t.Fatalf("protected builtin delete must be refused: %s", res.output)
 	}
 	if _, err := os.Stat(filepath.Join(enoughDir, "SKILL.md")); err != nil {
-		t.Fatal("enough skill must survive")
+		t.Fatal("enough-agent skill must survive")
 	}
 }
 

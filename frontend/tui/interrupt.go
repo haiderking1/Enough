@@ -6,6 +6,10 @@ import (
 )
 
 func (a *App) handleInterrupt() {
+	if a.mode == modeWriteApproval {
+		a.deferWriteApproval()
+		return
+	}
 	if a.compacting {
 		a.mu.Lock()
 		ag := a.agent
@@ -70,6 +74,9 @@ func (a *App) handleCtrlD() bool {
 		return false
 	}
 	if a.mode == modeModelPicker {
+		return false
+	}
+	if a.mode == modeWriteApproval {
 		return false
 	}
 	if strings.TrimSpace(a.editor.Value()) != "" {

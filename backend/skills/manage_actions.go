@@ -527,7 +527,7 @@ func patchSkill(name, oldString, newString, filePath string, replaceAll bool, gu
 func pinnedGuard(name string) string {
 	um := LoadUsage()
 	if rec, ok := um[name]; ok && rec.Pinned {
-		return fmt.Sprintf("Skill '%s' is pinned and cannot be deleted by skill_manage. Ask the user to run `enough curator unpin %s` if they want to delete it. Patches and edits are allowed on pinned skills; only deletion is blocked.", name, name)
+		return fmt.Sprintf("Skill '%s' is pinned and cannot be deleted by skill_manage. Ask the user to run `/curator-unpin %s` or `enough curator unpin %s` if they want to delete it. Patches and edits are allowed on pinned skills; only deletion is blocked.", name, name, name)
 	}
 	return ""
 }
@@ -536,6 +536,7 @@ func pinnedGuard(name string) string {
 // directory is moved to .archive/ (recoverable) instead of removed, and the
 // curator-protected builtins are refused outright.
 func archiveDeleteSkill(name, absorbedInto string) (SkillManageResult, error) {
+	name = ResolveSkillLookupName(name)
 	if IsProtectedBuiltin(name) {
 		return SkillManageResult{Success: false, Error: fmt.Sprintf("Skill '%s' is a protected built-in and cannot be archived or deleted by an autonomous pass.", name)}, nil
 	}

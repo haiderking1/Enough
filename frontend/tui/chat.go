@@ -21,6 +21,8 @@ type chatMsg struct {
 	toolPending bool
 	toolAdded    int
 	toolRemoved  int
+	toolDiffSnapshotted bool
+	toolBeforeContent   string
 	tokensBefore int
 }
 

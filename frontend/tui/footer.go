@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/enough/enough/backend/agent"
+	"github.com/enough/enough/backend/approval"
 	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/opencode"
 	"github.com/enough/enough/backend/session"
@@ -142,6 +143,10 @@ func (a *App) renderFooter(width int) []string {
 	if skillsEnabled {
 		discovered, _ := skills.DiscoverAllSkills(a.session.CWD(), runCfg)
 		statsLeft += a.styles.LogDim.Render(fmt.Sprintf(" · skills %d", len(discovered)))
+	}
+
+	if pending := approval.PendingTotalCount(); pending > 0 {
+		statsLeft += a.styles.FooterWarn.Render(fmt.Sprintf(" · pending %d", pending))
 	}
 
 	statsLine := footerJoin(width, statsLeft, a.styles.LogDim.Render(rightSide))

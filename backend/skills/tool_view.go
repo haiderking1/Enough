@@ -42,6 +42,7 @@ type SkillViewResult struct {
 }
 
 func findSkillCandidates(name, workDir string, cfg config.Runtime) []skillCandidate {
+	name = ResolveSkillLookupName(name)
 	var candidates []skillCandidate
 	seen := make(map[string]bool)
 
@@ -275,6 +276,7 @@ func scanLinkedFiles(skillDir string) map[string][]string {
 }
 
 func executeSkillViewInternal(name, filePath, workDir string, cfg config.Runtime, sessionId string, preprocess bool) SkillViewResult {
+	name = ResolveSkillLookupName(name)
 	name = strings.TrimSpace(name)
 	filePath = strings.TrimSpace(filePath)
 

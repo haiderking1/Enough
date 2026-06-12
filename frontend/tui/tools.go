@@ -11,10 +11,11 @@ func (a *App) handleToolStart(ev core.ToolCallEvent) {
 		toolPending: true,
 	}
 	switch ev.Name {
-	case "write_file":
-		msg.toolAdded, msg.toolRemoved = diffWriteFile(ev.Args)
-	case "edit_file":
-		msg.toolAdded, msg.toolRemoved = diffEditFile(ev.Args)
+	case "write_file", "edit_file":
+		if before, ok := readFileForDiff(pathFromToolArgs(ev.Args)); ok {
+			msg.toolDiffSnapshotted = true
+			msg.toolBeforeContent = before
+		}
 	}
 	a.messages = append(a.messages, msg)
 	a.bumpChat()
@@ -52,6 +53,14 @@ func (a *App) handleToolResult(ev core.ToolCallEvent) {
 		msg.toolPending = false
 		msg.toolResult = ev.Result
 		msg.toolError = ev.Error
+		switch msg.toolName {
+		case "write_file", "edit_file":
+			if msg.toolDiffSnapshotted {
+				msg.toolAdded, msg.toolRemoved = finalizeFileToolDiff(
+					msg.toolName, msg.toolArgs, msg.toolBeforeContent, ev.Error,
+				)
+			}
+		}
 		a.bumpChat()
 		return
 	}

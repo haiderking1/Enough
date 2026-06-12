@@ -89,10 +89,10 @@ func TestCuratorNeverTouchesProtectedOrNonAgentSkills(t *testing.T) {
 	now := time.Now()
 	cfg := config.DefaultCurator()
 
-	// Bundled `enough` skill, even with a (bogus) agent-created record and
+	// Bundled `enough-agent` skill, even with a (bogus) agent-created record and
 	// ancient activity, must survive.
-	writeTestSkill(t, "enough")
-	seedAgentRecord(t, "enough", now.Add(-365*24*time.Hour), "active", false)
+	writeTestSkill(t, "enough-agent")
+	seedAgentRecord(t, "enough-agent", now.Add(-365*24*time.Hour), "active", false)
 
 	// A user-created skill (no created_by) with ancient activity must not be
 	// a candidate at all.
@@ -106,8 +106,8 @@ func TestCuratorNeverTouchesProtectedOrNonAgentSkills(t *testing.T) {
 	if counts.Archived != 0 || counts.MarkedStale != 0 {
 		t.Fatalf("protected/non-agent skills were touched: %+v", counts)
 	}
-	if _, err := os.Stat(filepath.Join(SkillsDir(), "enough", "SKILL.md")); err != nil {
-		t.Fatal("bundled enough skill must never be archived")
+	if _, err := os.Stat(filepath.Join(SkillsDir(), "enough-agent", "SKILL.md")); err != nil {
+		t.Fatal("bundled enough-agent skill must never be archived")
 	}
 	if _, err := os.Stat(filepath.Join(SkillsDir(), "user-skill", "SKILL.md")); err != nil {
 		t.Fatal("user skill must never be archived by the curator")
@@ -155,13 +155,13 @@ func TestCuratorCandidateListExcludesProtected(t *testing.T) {
 	t.Setenv("ENOUGH_HOME", t.TempDir())
 	now := time.Now()
 
-	writeTestSkill(t, "enough")
-	seedAgentRecord(t, "enough", now, "active", false)
+	writeTestSkill(t, "enough-agent")
+	seedAgentRecord(t, "enough-agent", now, "active", false)
 	writeTestSkill(t, "real-candidate")
 	seedAgentRecord(t, "real-candidate", now, "active", false)
 
 	list := RenderCuratorCandidateList()
-	if strings.Contains(list, "- enough ") {
+	if strings.Contains(list, "- enough-agent ") {
 		t.Fatalf("protected builtin in candidate list:\n%s", list)
 	}
 	if !strings.Contains(list, "real-candidate") {

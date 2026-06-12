@@ -77,6 +77,10 @@ type Agent struct {
 	// turn's event channel closes.
 	notify func(string)
 
+	// approvalPrompt opens the TUI write-approval overlay when a tool stages
+	// a pending skill or memory write (Hermes approval.request parity).
+	approvalPrompt func(subsystem, pendingID string)
+
 	// writeOrigin distinguishes foreground (user-directed) tool writes from
 	// background-review writes. Only background-review skill creates are
 	// marked agent-created (curator-eligible).
@@ -308,6 +312,14 @@ func (a *Agent) SetNotify(notify func(string)) {
 	a.notify = notify
 }
 
+// SetApprovalPrompt installs the callback that opens the inline write-approval
+// overlay when a tool result is staged for user review.
+func (a *Agent) SetApprovalPrompt(fn func(subsystem, pendingID string)) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.approvalPrompt = fn
+}
+
 // MemoryStore exposes the built-in memory store (nil when disabled).
 func (a *Agent) MemoryStore() *memory.Store {
 	a.mu.Lock()
@@ -346,6 +358,10 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 			shouldReviewMemory = true
 			a.turnsSinceMemory = 0
 		}
+	}
+	if a.cfg.Memory.Enabled && a.cfg.Memory.UserProfileEnabled && a.memStore != nil &&
+		userMessageSignalsProfileCorrection(userText) {
+		shouldReviewMemory = true
 	}
 	a.mu.Unlock()
 
@@ -665,6 +681,10 @@ func (a *Agent) runLoop(ctx context.Context) error {
 
 			result := a.executeTool(ctx, id, call.Function.Name, call.Function.Arguments)
 			a.toolResult(id, result.output, result.isErr)
+			a.notifyStagedWrite(result.output)
+			if call.Function.Name == memory.ToolName {
+				a.notifyDirectMemoryWrite(call.Function.Arguments, result.output)
+			}
 
 			toolMsg := opencode.Message{
 				Role:       "tool",

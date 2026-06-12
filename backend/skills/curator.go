@@ -11,7 +11,7 @@ package skills
 // Strict invariants:
 //   - Only touches agent-created skills (created_by == "agent" in
 //     .usage.json), except bundled skills under the prune_builtins path.
-//   - The bundled `enough` skill is protected: NEVER archived or
+//   - The bundled `enough-agent` skill is protected: NEVER archived or
 //     consolidated, regardless of any flag.
 //   - Never auto-deletes — only archives. Archive is recoverable.
 //   - Pinned skills bypass all auto-transitions.
@@ -30,7 +30,7 @@ import (
 // CuratorProtectedBuiltins are bundled skills the curator must never archive
 // or consolidate, regardless of prune_builtins, pin state, or LLM judgment.
 var CuratorProtectedBuiltins = map[string]bool{
-	"enough": true,
+	"enough-agent": true,
 }
 
 // CuratorState is the persistent scheduler + status record
@@ -83,10 +83,9 @@ func IsProtectedBuiltin(name string) bool {
 	return CuratorProtectedBuiltins[name]
 }
 
-// IsBundledSkillName reports whether the skill ships with Enough. Currently
-// only the `enough` skill is bundled (see bundle.go).
+// IsBundledSkillName reports whether the skill ships with Enough.
 func IsBundledSkillName(name string) bool {
-	return name == "enough"
+	return name == "enough-agent"
 }
 
 // loadSuppressed returns the set of bundled skills previously archived by the

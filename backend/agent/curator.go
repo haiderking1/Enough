@@ -61,7 +61,7 @@ const curatorDryRunBanner = "═════════════════
 
 // curatorReviewPrompt — ported from Hermes agent/curator.py
 // (CURATOR_REVIEW_PROMPT), adapted to Enough: ~/.enough/skills paths, bash
-// instead of terminal, /curator-* commands, protected built-in `enough`, no
+// instead of terminal, /curator-* commands, protected built-in `enough-agent`, no
 // cron-job rewriting.
 const curatorReviewPrompt = "You are running as Enough's background skill CURATOR. This is an " +
 	"UMBRELLA-BUILDING consolidation pass, not a passive audit and not a " +
@@ -84,7 +84,7 @@ const curatorReviewPrompt = "You are running as Enough's background skill CURATO
 	"Archives are recoverable; deletion is not.\n" +
 	"3. DO NOT touch skills shown as pinned=yes. Skip them entirely.\n" +
 	"3b. DO NOT archive, delete, consolidate, move, or otherwise modify any " +
-	"skill named in the protected built-ins list (currently: enough). These " +
+	"skill named in the protected built-ins list (currently: enough-agent). These " +
 	"back load-bearing UX and are filtered out of the candidate list below — " +
 	"never resurrect one as an archive or absorb target.\n" +
 	"4. DO NOT use usage counters as a reason to skip consolidation. The " +
@@ -192,7 +192,7 @@ const curatorReviewPrompt = "You are running as Enough's background skill CURATO
 
 const curatorPruneBuiltinsNote = "\n\nPRUNE-BUILTINS MODE IS ON: bundled built-in skills " +
 	"MAY be archived for staleness/irrelevance, overriding hard rule #1 " +
-	"for bundled skills ONLY — EXCEPT the protected built-ins (enough), " +
+	"for bundled skills ONLY — EXCEPT the protected built-ins (enough-agent), " +
 	"which remain strictly off-limits. Treat a stale built-in the same as " +
 	"a stale agent-created skill: archive it (never delete)."
 
@@ -259,8 +259,11 @@ func RunCuratorReview(cfg config.Runtime, dryRun, synchronous bool, notify func(
 
 	llmPass := func() {
 		defer func() { _ = recover() }()
+		if notify != nil {
+			notify("🧹 Curator review running…")
+		}
 
-		finalSummary := runCuratorLLMPass(cfg, dryRun, prefix, autoSummary)
+		finalSummary := runCuratorLLMPass(cfg, dryRun, prefix, autoSummary, notify)
 
 		st := skills.LoadCuratorState()
 		st.LastRunDurationSeconds = time.Since(start).Seconds()
@@ -286,7 +289,7 @@ func RunCuratorReview(cfg config.Runtime, dryRun, synchronous bool, notify func(
 }
 
 // runCuratorLLMPass spawns the curator fork and returns the run summary.
-func runCuratorLLMPass(cfg config.Runtime, dryRun bool, prefix, autoSummary string) string {
+func runCuratorLLMPass(cfg config.Runtime, dryRun bool, prefix, autoSummary string, notify func(string)) string {
 	candidateList := skills.RenderCuratorCandidateList()
 	if strings.Contains(candidateList, "No agent-created skills") {
 		return prefix + autoSummary + "; llm: skipped (no candidates)"
@@ -317,6 +320,7 @@ func runCuratorLLMPass(cfg config.Runtime, dryRun bool, prefix, autoSummary stri
 		writeOrigin:   WriteOriginBackgroundReview,
 		maxIterations: curatorMaxIterations,
 		swarmDepth:    maxSwarmDepth,
+		notify:        notify,
 	}
 	curator.cachedSystemPrompt = "You are Enough's background skill curator. You maintain the " +
 		"skill library at ~/.enough/skills/. Follow the task instructions exactly."
