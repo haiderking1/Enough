@@ -43,6 +43,12 @@ type App struct {
 	treePickerChoice  int
 	treePickerTarget  string
 
+	modelRegistry       *opencode.Registry
+	modelPickerFilter   string
+	modelPickerCursor   int
+	modelPickerStatus   string
+	modelPickerThinking opencode.ThinkingLevel
+
 	running                  bool
 	compacting               bool
 	compactionLabel          string
@@ -98,6 +104,7 @@ func newApp(t *term.Terminal) *App {
 		editor:                NewEditor(512),
 		lastActivityWordIndex: -1,
 		renderCh:              make(chan struct{}, 1),
+		modelRegistry:         opencode.NewRegistry(),
 	}
 }
 
@@ -131,6 +138,7 @@ func (a *App) run() error {
 	}
 
 	a.loadThinkingSettings()
+	a.startModelFetch()
 
 	if !auth.Connected() {
 		a.appendMessage("system", "not connected — type / to connect")
@@ -341,6 +349,12 @@ func (a *App) handleKey(k parsedKey) bool {
 		}
 	}
 
+	if !running && mode == modeModelPicker {
+		if a.handleModelPickerKey(k) {
+			return false
+		}
+	}
+
 	switch k.action {
 	case keyCtrlC:
 		return a.handleCtrlC()
@@ -394,7 +408,7 @@ func (a *App) handleKey(k parsedKey) bool {
 		}
 	}
 
-	if !running && a.mode != modeSessionPicker {
+	if !running && a.mode != modeSessionPicker && a.mode != modeModelPicker {
 		switch k.action {
 		case keyShiftTab:
 			a.cycleThinkingLevel()
@@ -411,13 +425,13 @@ func (a *App) handleKey(k parsedKey) bool {
 		}
 	}
 
-	if k.action == keyEnter && (!running || a.compacting) && a.mode != modeSessionPicker {
+	if k.action == keyEnter && (!running || a.compacting) && a.mode != modeSessionPicker && a.mode != modeModelPicker {
 		a.handleSubmit()
 		a.requestRender()
 		return false
 	}
 
-	if a.mode == modeSessionPicker {
+	if a.mode == modeSessionPicker || a.mode == modeModelPicker {
 		return false
 	}
 
@@ -471,6 +485,13 @@ func (a *App) buildLines() (out []string, stablePrefix int) {
 	}
 
 	if picker := a.renderSessionPicker(w); picker != "" {
+		if len(out) > 0 {
+			out = append(out, "")
+		}
+		out = append(out, clampSplitLines(strings.Split(picker, "\n"), w)...)
+	}
+
+	if picker := a.renderModelPicker(w); picker != "" {
 		if len(out) > 0 {
 			out = append(out, "")
 		}

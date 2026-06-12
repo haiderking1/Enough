@@ -1,6 +1,10 @@
 package tui
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/enough/enough/frontend/tui/markdown"
+)
 
 type chatRenderCache struct {
 	revision         uint64
@@ -59,7 +63,12 @@ func (a *App) renderChatIncremental(width int) []string {
 		width = 80
 	}
 
-	specs := chatBlockSpecs(a.styles, a.messages, width, a.hideThinking, a.toolsExpanded, a.toolSpinnerFrame)
+	specs := chatBlockSpecs(a.styles, a.messages, width, a.hideThinking, a.toolsExpanded, a.toolSpinnerFrame, markdown.RenderOptions{
+		OnImageReady: func() {
+			a.bumpChat()
+			a.requestRender()
+		},
+	})
 	bc := &a.chatBlocks
 
 	n := len(specs)

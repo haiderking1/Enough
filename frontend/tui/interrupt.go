@@ -27,6 +27,10 @@ func (a *App) handleInterrupt() {
 		a.dismissSessionPicker()
 		return
 	}
+	if a.mode == modeModelPicker {
+		a.dismissModelPicker()
+		return
+	}
 	if a.slashActive() {
 		a.dismissSlashMenu()
 		return
@@ -63,6 +67,9 @@ func (a *App) handleCtrlD() bool {
 		return false
 	}
 	if a.mode == modeSessionPicker {
+		return false
+	}
+	if a.mode == modeModelPicker {
 		return false
 	}
 	if strings.TrimSpace(a.editor.Value()) != "" {

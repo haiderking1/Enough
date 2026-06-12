@@ -43,3 +43,28 @@ func TestRepairToolMessagesAssignsMissingToolCallIDs(t *testing.T) {
 		t.Fatalf("tool reply id mismatch: %q vs %q", fixed[1].ToolCallID, fixed[0].ToolCalls[0].ID)
 	}
 }
+
+func TestStripResponseFieldsRemovesUsage(t *testing.T) {
+	msgs := []Message{
+		{Role: "user", Content: StringContent("hi")},
+		{Role: "assistant", Content: StringContent("hello"), Usage: &Usage{Input: 10, Output: 5}},
+	}
+	out := StripResponseFields(msgs)
+	if out[1].Usage != nil {
+		t.Fatal("expected usage stripped from assistant message")
+	}
+	if msgs[1].Usage == nil {
+		t.Fatal("StripResponseFields should not mutate input slice")
+	}
+}
+
+func TestPrepareRequestMessagesStripsUsage(t *testing.T) {
+	msgs := []Message{
+		{Role: "user", Content: StringContent("hi")},
+		{Role: "assistant", Content: StringContent("hello"), Usage: &Usage{Input: 10, Output: 5}},
+	}
+	out := PrepareRequestMessages(msgs, "deepseek-v4-flash")
+	if out[1].Usage != nil {
+		t.Fatal("expected usage stripped")
+	}
+}

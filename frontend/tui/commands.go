@@ -38,6 +38,8 @@ func (a *App) handleSlash(input string) {
 		a.openSessionPicker()
 	case "new":
 		a.startNewSession()
+	case "model":
+		a.openModelPicker(arg)
 	case "compact":
 		a.startCompact(arg)
 	case "auto-compact":

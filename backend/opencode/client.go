@@ -43,6 +43,7 @@ func (c *Client) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error
 	if req.Model == "" {
 		req.Model = c.model
 	}
+	req.Messages = PrepareRequestMessages(req.Messages, req.Model)
 
 	body, err := json.Marshal(req)
 	if err != nil {
