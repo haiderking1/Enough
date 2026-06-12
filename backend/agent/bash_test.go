@@ -68,29 +68,55 @@ func TestBashStreamsLiveOutput(t *testing.T) {
 // A cancelled context must kill the command promptly rather than waiting for it
 // to finish, and report the partial output as interrupted.
 func TestBashCancellationKillsCommand(t *testing.T) {
-	a, _ := newBashTestAgent(t)
+	a, sink := newBashTestAgent(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type execResult struct {
+		res   toolResult
+		after time.Duration
+	}
+	done := make(chan execResult, 1)
+	start := time.Now()
 	go func() {
-		time.Sleep(150 * time.Millisecond)
-		cancel()
+		res := a.toolBash(ctx, "call_1", `{"command":"echo started; sleep 30"}`)
+		done <- execResult{res: res, after: time.Since(start)}
 	}()
 
-	start := time.Now()
-	res := a.toolBash(ctx, "call_1", `{"command":"echo started; sleep 30"}`)
-	elapsed := time.Since(start)
+	// Cancel only after partial output is visible. A fixed sleep flakes under
+	// -race on slow CI runners where bash may not have started yet.
+	waitPartial := time.After(5 * time.Second)
+	for {
+		if strings.Contains(sink.joined(), "started") {
+			cancel()
+			break
+		}
+		select {
+		case <-waitPartial:
+			cancel()
+			t.Fatal("timed out waiting for partial output before cancel")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
 
-	if elapsed > 5*time.Second {
-		t.Fatalf("command was not cancelled promptly: took %s", elapsed)
-	}
-	if !res.isErr {
-		t.Fatal("expected interrupted result to be an error")
-	}
-	if !strings.Contains(res.output, "[interrupted]") {
-		t.Fatalf("expected interrupted marker, got %q", res.output)
-	}
-	if !strings.Contains(res.output, "started") {
-		t.Fatalf("expected partial output before cancel, got %q", res.output)
+	select {
+	case r := <-done:
+		if r.after > 5*time.Second {
+			t.Fatalf("command was not cancelled promptly: took %s", r.after)
+		}
+		res := r.res
+		if !res.isErr {
+			t.Fatal("expected interrupted result to be an error")
+		}
+		if !strings.Contains(res.output, "[interrupted]") {
+			t.Fatalf("expected interrupted marker, got %q", res.output)
+		}
+		if !strings.Contains(res.output, "started") {
+			t.Fatalf("expected partial output before cancel, got %q", res.output)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("toolBash did not return after cancel")
 	}
 }
 

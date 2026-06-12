@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 	"sync"
@@ -50,11 +51,32 @@ func (a *Agent) toolBash(ctx context.Context, id, argsJSON string) toolResult {
 	sw := &bashStreamWriter{max: maxBashOutput, onChunk: func(chunk string) {
 		a.toolDelta(id, chunk)
 	}}
-	cmd.Stdout = sw
-	cmd.Stderr = sw
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return toolResult{output: err.Error(), isErr: true}
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return toolResult{output: err.Error(), isErr: true}
+	}
+
+	if err := cmd.Start(); err != nil {
+		return toolResult{output: err.Error(), isErr: true}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	copyOut := func(r io.Reader) {
+		defer wg.Done()
+		_, _ = io.Copy(sw, r)
+	}
+	go copyOut(stdout)
+	go copyOut(stderr)
 
 	started := time.Now()
-	err := cmd.Run()
+	err = cmd.Wait()
+	wg.Wait()
 	duration := time.Since(started)
 	text := sw.String()
 
