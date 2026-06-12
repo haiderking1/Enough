@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -44,11 +45,17 @@ type App struct {
 	treePickerChoice  int
 	treePickerTarget  string
 
-	modelRegistry       *opencode.Registry
-	modelPickerFilter   string
-	modelPickerCursor   int
-	modelPickerStatus   string
-	modelPickerThinking opencode.ThinkingLevel
+	modelRegistry            *opencode.Registry
+	modelPickerFilter        string
+	modelPickerProviderCursor int
+	modelPickerCursor        int
+	modelPickerFocus         modelPickerFocus
+	modelPickerStatus        string
+	modelPickerThinking      opencode.ThinkingLevel
+
+	connectPickerCursor int
+	connectPickerStatus string
+	codexOAuthCancel    context.CancelFunc
 
 	running                  bool
 	compacting               bool
@@ -127,7 +134,7 @@ func newApp(t *term.Terminal) *App {
 		renderCh:              make(chan struct{}, 1),
 		notifyCh:              make(chan string, 16),
 		approvalPromptCh:      make(chan writeApprovalItem, 16),
-		modelRegistry:         opencode.NewRegistry(),
+		modelRegistry:         opencode.DefaultRegistry(),
 		lastActiveAt:          time.Now(),
 	}
 }
@@ -430,6 +437,12 @@ func (a *App) handleKey(k parsedKey) bool {
 		}
 	}
 
+	if !running && mode == modeConnectPicker {
+		if a.handleConnectPickerKey(k) {
+			return false
+		}
+	}
+
 	switch k.action {
 	case keyCtrlC:
 		return a.handleCtrlC()
@@ -483,7 +496,7 @@ func (a *App) handleKey(k parsedKey) bool {
 		}
 	}
 
-	if !running && a.mode != modeSessionPicker && a.mode != modeModelPicker && a.mode != modeWriteApproval {
+	if !running && a.mode != modeSessionPicker && a.mode != modeModelPicker && a.mode != modeConnectPicker && a.mode != modeConnectCodex && a.mode != modeWriteApproval {
 		switch k.action {
 		case keyShiftTab:
 			a.cycleThinkingLevel()
@@ -500,13 +513,13 @@ func (a *App) handleKey(k parsedKey) bool {
 		}
 	}
 
-	if k.action == keyEnter && (!running || a.compacting) && a.mode != modeSessionPicker && a.mode != modeModelPicker && a.mode != modeWriteApproval {
+	if k.action == keyEnter && (!running || a.compacting) && a.mode != modeSessionPicker && a.mode != modeModelPicker && a.mode != modeConnectPicker && a.mode != modeConnectCodex && a.mode != modeWriteApproval {
 		a.handleSubmit()
 		a.requestRender()
 		return false
 	}
 
-	if a.mode == modeSessionPicker || a.mode == modeModelPicker {
+	if a.mode == modeSessionPicker || a.mode == modeModelPicker || a.mode == modeConnectPicker || a.mode == modeConnectCodex {
 		return false
 	}
 
@@ -567,6 +580,13 @@ func (a *App) buildLines() (out []string, stablePrefix int) {
 	}
 
 	if picker := a.renderModelPicker(w); picker != "" {
+		if len(out) > 0 {
+			out = append(out, "")
+		}
+		out = append(out, clampSplitLines(strings.Split(picker, "\n"), w)...)
+	}
+
+	if picker := a.renderConnectPicker(w); picker != "" {
 		if len(out) > 0 {
 			out = append(out, "")
 		}
@@ -634,6 +654,15 @@ func (a *App) renderTaskInput() string {
 			return prompt + a.styles.InputCaret.Render("▎") + a.styles.InputHint.Render(connectPlaceholder)
 		}
 		return a.renderTypedLine(prompt, runes, cursor)
+	}
+
+	if a.mode == modeConnectCodex {
+		prompt := a.styles.InputPrompt.Render("… ")
+		hint := "waiting for browser sign-in · esc cancel"
+		if a.connectPickerStatus != "" {
+			hint = a.connectPickerStatus + " · esc cancel"
+		}
+		return prompt + a.styles.InputCaret.Render("▎") + "  " + a.styles.InputHint.Render(hint)
 	}
 
 	if a.mode == modeWriteApproval {

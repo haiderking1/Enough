@@ -5,6 +5,8 @@ type composerMode int
 const (
 	modeTask composerMode = iota
 	modeConnect
+	modeConnectPicker
+	modeConnectCodex
 	modeSessionPicker
 	modeTreePicker
 	modeModelPicker
@@ -22,8 +24,8 @@ type slashCommand struct {
 }
 
 var slashCommands = []slashCommand{
-	{name: "connect", desc: "link your OpenCode API key"},
-	{name: "model", desc: "pick an OpenCode Go model"},
+	{name: "connect", desc: "link OpenCode API key or OpenAI Codex OAuth"},
+	{name: "model", desc: "pick provider and model"},
 	{name: "new", desc: "start a fresh session"},
 	{name: "sessions", desc: "list saved sessions for this project"},
 	{name: "resume", desc: "pick a session to resume"},

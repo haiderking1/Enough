@@ -26,6 +26,10 @@ func main() {
 		runCuratorCLI()
 		return
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "auth" {
+		runAuthCLI()
+		return
+	}
 
 	// 2. Parse command-line args
 	var preloads []string
@@ -200,4 +204,5 @@ func printUsage() {
 	fmt.Println("  --skills <skills>     Comma-separated list of skills to preload")
 	fmt.Println("  -q, --query <query>   Single query to execute, then exit")
 	fmt.Println("  skills <action>       Manage skills (run 'enough skills' for actions)")
+	fmt.Println("  auth add openai-codex Browser OAuth for OpenAI Codex subscription")
 }

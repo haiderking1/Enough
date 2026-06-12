@@ -6,11 +6,14 @@ import (
 	"github.com/enough/enough/backend/opencode"
 )
 
-func ModelContextWindow(model string, configOverride int) int {
+func ModelContextWindow(provider, model string, configOverride int) int {
 	if configOverride > 0 {
 		return configOverride
 	}
-	if w := opencode.ModelContextWindow(model); w > 0 {
+	if provider == "" {
+		provider = opencode.ProviderOpenCode
+	}
+	if w := opencode.ResolveContextWindow(provider, model); w > 0 {
 		return w
 	}
 	modelLower := strings.ToLower(model)

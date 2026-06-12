@@ -29,11 +29,19 @@ func formatFooterTokens(count int) string {
 	}
 }
 
-func footerProviderLabel(endpoint string) string {
+func footerProviderLabel(provider, endpoint string) string {
+	switch provider {
+	case config.ProviderCodex:
+		return "openai-codex"
+	case config.ProviderOpenCode:
+		return "opencode-go"
+	}
 	endpoint = strings.ToLower(endpoint)
 	switch {
 	case strings.Contains(endpoint, "/zen/go"):
 		return "opencode-go"
+	case strings.Contains(endpoint, "chatgpt.com"), strings.Contains(endpoint, "codex"):
+		return "openai-codex"
 	case strings.Contains(endpoint, "opencode.ai"):
 		return "opencode"
 	default:
@@ -61,6 +69,7 @@ func (a *App) renderFooter(width int) []string {
 	autoCompact := true
 	model := config.DefaultModel
 	endpoint := config.DefaultEndpoint
+	provider := config.ProviderOpenCode
 	thinking := string(a.thinkingLevel)
 	if err == nil {
 		if cfg.Compaction != nil {
@@ -71,6 +80,9 @@ func (a *App) renderFooter(width int) []string {
 		}
 		if cfg.Endpoint != "" {
 			endpoint = cfg.Endpoint
+		}
+		if cfg.Provider != "" {
+			provider = cfg.Provider
 		}
 		if cfg.ThinkingLevel != "" {
 			thinking = cfg.ThinkingLevel
@@ -89,15 +101,18 @@ func (a *App) renderFooter(width int) []string {
 		if runCfg.Endpoint != "" {
 			endpoint = runCfg.Endpoint
 		}
+		if runCfg.Provider != "" {
+			provider = runCfg.Provider
+		}
 		if runCfg.ThinkingLevel != "" {
 			thinking = runCfg.ThinkingLevel
 		}
 		skillsEnabled = runCfg.Skills.Enabled
 	}
 
-	contextWindow := agent.ModelContextWindow(model, 0)
+	contextWindow := agent.ModelContextWindow(provider, model, 0)
 	if err == nil && cfg.Compaction != nil && cfg.Compaction.ContextWindow > 0 {
-		contextWindow = agent.ModelContextWindow(model, cfg.Compaction.ContextWindow)
+		contextWindow = agent.ModelContextWindow(provider, model, cfg.Compaction.ContextWindow)
 	}
 
 	sessionMsgs := a.session.BuildSessionContext().Messages
@@ -134,7 +149,7 @@ func (a *App) renderFooter(width int) []string {
 			rightSide = model + " • " + thinking
 		}
 	}
-	rightSide = fmt.Sprintf("(%s) %s", footerProviderLabel(endpoint), rightSide)
+	rightSide = fmt.Sprintf("(%s) %s", footerProviderLabel(provider, endpoint), rightSide)
 
 	if a.evidenceCount > 0 {
 		statsLeft += a.styles.LogDim.Render(fmt.Sprintf(" · ev %d", a.evidenceCount))

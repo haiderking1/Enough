@@ -105,11 +105,13 @@ var knownModels = map[string]ModelInfo{
 
 var defaultRegistry = NewRegistry()
 
-// Registry caches models fetched from the OpenCode Go API at startup.
+// Registry caches models fetched from provider APIs at startup.
 type Registry struct {
-	mu     sync.RWMutex
-	models []ModelInfo
-	err    error
+	mu          sync.RWMutex
+	models      []ModelInfo
+	codexModels []ModelInfo
+	err         error
+	codexErr    error
 }
 
 func NewRegistry() *Registry {
@@ -157,15 +159,60 @@ func (r *Registry) Refresh(ctx context.Context, endpoint, apiKey string) error {
 	return err
 }
 
+func (r *Registry) RefreshCodex(ctx context.Context, accessToken string) error {
+	models, err := FetchCodexModels(ctx, accessToken)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err == nil {
+		r.codexModels = models
+		r.codexErr = nil
+		return nil
+	}
+	r.codexErr = err
+	if len(r.codexModels) == 0 {
+		r.codexModels = CodexModels()
+	}
+	return err
+}
+
+func (r *Registry) CodexErr() error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.codexErr
+}
+
+func (r *Registry) CodexModelsList() []ModelInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if len(r.codexModels) > 0 {
+		out := make([]ModelInfo, len(r.codexModels))
+		copy(out, r.codexModels)
+		return out
+	}
+	return CodexModels()
+}
+
+func (r *Registry) LookupCodex(id string) (ModelInfo, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, m := range r.codexModels {
+		if m.ID == id {
+			return m, true
+		}
+	}
+	if m, ok := codexKnownModels[id]; ok {
+		m.ThinkingLevels = append([]ThinkingLevel(nil), defaultReasoningLevels...)
+		return normalizeModel(m), true
+	}
+	return ModelInfo{}, false
+}
+
 func LookupModel(id string) (ModelInfo, bool) {
 	return defaultRegistry.Lookup(id)
 }
 
 func ModelContextWindow(id string) int {
-	if m, ok := LookupModel(id); ok && m.ContextWindow > 0 {
-		return m.ContextWindow
-	}
-	return 128000
+	return ResolveContextWindow(ProviderOpenCode, id)
 }
 
 func FetchModels(ctx context.Context, endpoint, apiKey string) ([]ModelInfo, error) {
@@ -257,9 +304,12 @@ func mergeModel(id string) ModelInfo {
 
 func normalizeModel(m ModelInfo) ModelInfo {
 	if len(m.ThinkingLevels) == 0 {
-		if m.Reasoning && SupportsThinkingLevels(m.ID) {
+		switch {
+		case SupportsThinkingLevels(m.ID):
 			m.ThinkingLevels = append([]ThinkingLevel(nil), deepseekV4FlashLevels...)
-		} else {
+		case m.Reasoning:
+			m.ThinkingLevels = append([]ThinkingLevel(nil), defaultReasoningLevels...)
+		default:
 			m.ThinkingLevels = []ThinkingLevel{ThinkingOff}
 		}
 	}
@@ -299,14 +349,11 @@ func FormatContextWindow(n int) string {
 }
 
 func FormatThinkingBadge(m ModelInfo, level ThinkingLevel) string {
-	if len(m.ThinkingLevels) > 1 {
-		if level == "" {
-			level = ThinkingOff
+	if !SupportsThinking(m.ID) {
+		if m.Reasoning {
+			return "reasoning"
 		}
-		return "thinking " + string(level)
+		return ""
 	}
-	if m.Reasoning {
-		return "reasoning"
-	}
-	return ""
+	return FormatThinkingLabel(level)
 }
