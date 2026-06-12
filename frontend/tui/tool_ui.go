@@ -70,12 +70,6 @@ func parseToolRow(msg chatMsg) toolRow {
 		row.Kind = toolKindEdit
 		row.Action = "Edited"
 		row.Target = displayPath(jsonString(args["path"]))
-		if row.Added == 0 && row.Removed == 0 {
-			old := jsonString(args["old_string"])
-			newS := jsonString(args["new_string"])
-			row.Removed = countLines(old)
-			row.Added = countLines(newS)
-		}
 	case "read_file":
 		row.Kind = toolKindRead
 		row.Action = "Read"
@@ -126,6 +120,31 @@ func parseToolRow(msg chatMsg) toolRow {
 		row.Target = jsonString(args["name"])
 		if fp := jsonString(args["file_path"]); fp != "" {
 			row.Target += " (" + fp + ")"
+		}
+	case "memory":
+		row.Kind = toolKindOther
+		row.Action = "memory"
+		act := jsonString(args["action"])
+		tgt := jsonString(args["target"])
+		if tgt == "" {
+			tgt = "memory"
+		}
+		if act != "" {
+			row.Target = act + " → " + tgt
+			switch act {
+			case "add":
+				if content := oneLine(jsonString(args["content"])); content != "" {
+					row.Target += ": " + truncateMiddle(content, 56)
+				}
+			case "replace":
+				if repl := oneLine(jsonString(args["replacement"])); repl != "" {
+					row.Target += ": " + truncateMiddle(repl, 56)
+				}
+			case "remove":
+				if match := oneLine(jsonString(args["match"])); match != "" {
+					row.Target += ": " + truncateMiddle(match, 56)
+				}
+			}
 		}
 	case "skill_manage":
 		row.Kind = toolKindOther
@@ -483,6 +502,8 @@ func renderToolBlock(styles Styles, row toolRow, width int, expanded bool, spinn
 			return renderSkillViewBlock(styles, row, expanded)
 		case "skill_manage":
 			return renderSkillManageBlock(styles, row, expanded)
+		case "memory":
+			return renderMemoryBlock(styles, row, expanded)
 		}
 		return []string{renderGenericLine(styles, row)}
 	}
@@ -493,6 +514,9 @@ func renderWriteLine(styles Styles, row toolRow) string {
 	if row.Pending {
 		return head + " " + styles.ToolPending.Render("…")
 	}
+	if row.Added == 0 && row.Removed == 0 {
+		return head + " " + styles.ToolMuted.Render(">")
+	}
 	delta := styles.ToolDelta.Render(fmt.Sprintf("+%d", row.Added)) +
 		styles.ToolDeltaRemoved.Render(fmt.Sprintf("-%d", row.Removed))
 	return head + " " + delta + " " + styles.ToolMuted.Render(">")
@@ -502,6 +526,9 @@ func renderEditLine(styles Styles, row toolRow) string {
 	head := styles.ToolMuted.Render("Edited " + row.Target)
 	if row.Pending {
 		return head + " " + styles.ToolPending.Render("…")
+	}
+	if row.Added == 0 && row.Removed == 0 {
+		return head + " " + styles.ToolMuted.Render(">")
 	}
 	delta := styles.ToolDelta.Render(fmt.Sprintf("+%d", row.Added)) +
 		styles.ToolDeltaRemoved.Render(fmt.Sprintf("-%d", row.Removed))
@@ -675,9 +702,11 @@ func renderSkillManageBlock(styles Styles, row toolRow, expanded bool) []string 
 	}
 
 	var result struct {
-		Success bool   `json:"success"`
-		Message string `json:"message"`
-		Error   string `json:"error"`
+		Success   bool   `json:"success"`
+		Staged    bool   `json:"staged"`
+		PendingID string `json:"pending_id"`
+		Message   string `json:"message"`
+		Error     string `json:"error"`
 	}
 	if err := json.Unmarshal([]byte(row.Output), &result); err == nil {
 		if result.Success {
@@ -685,7 +714,63 @@ func renderSkillManageBlock(styles Styles, row toolRow, expanded bool) []string 
 			if msg == "" {
 				msg = "success"
 			}
-			lines = append(lines, styles.ToolSub.Render("└ "+msg))
+			subStyle := styles.ToolSub
+			if result.Staged {
+				subStyle = styles.FooterWarn
+				if result.PendingID != "" {
+					msg = msg + " (id: " + result.PendingID + ")"
+				}
+			}
+			lines = append(lines, subStyle.Render("└ "+msg))
+		} else {
+			errMsg := result.Error
+			if errMsg == "" {
+				errMsg = "failed"
+			}
+			lines = append(lines, styles.AssistError.Render("└ "+errMsg))
+		}
+	} else {
+		lines = append(lines, styles.ToolSub.Render("└ completed"))
+	}
+	return lines
+}
+
+func renderMemoryBlock(styles Styles, row toolRow, expanded bool) []string {
+	header := styles.ToolBullet.Render("●") + " " +
+		styles.ToolAction.Render("memory") + " " +
+		styles.ToolTarget.Render(row.Target)
+	lines := []string{header}
+
+	if row.Pending {
+		lines = append(lines, styles.ToolSub.Render("└ …"))
+		return lines
+	}
+	if row.Error {
+		lines = append(lines, styles.AssistError.Render("└ failed"))
+		return lines
+	}
+
+	var result struct {
+		Success   bool   `json:"success"`
+		Staged    bool   `json:"staged"`
+		PendingID string `json:"pending_id"`
+		Message   string `json:"message"`
+		Error     string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(row.Output), &result); err == nil {
+		if result.Success {
+			msg := result.Message
+			if msg == "" {
+				msg = "saved"
+			}
+			subStyle := styles.ToolSub
+			if result.Staged {
+				subStyle = styles.FooterWarn
+				if result.PendingID != "" {
+					msg = msg + " (id: " + result.PendingID + ")"
+				}
+			}
+			lines = append(lines, subStyle.Render("└ "+msg))
 		} else {
 			errMsg := result.Error
 			if errMsg == "" {

@@ -47,16 +47,19 @@ var reviewToolWhitelist = map[string]bool{
 }
 
 // Review prompts — ported verbatim from Hermes agent/background_review.py,
-// with Enough adaptations: the protected bundled skill is `enough` (Hermes:
-// `hermes-agent`), pinning is done via /curator-pin (Hermes: `hermes curator
-// pin`), and externally-installed skills replace "hub-installed".
+// with Enough adaptations: the protected bundled skill is `enough-agent`, pinning
+// is done via /curator-pin, and externally-installed skills replace "hub-installed".
 
 const memoryReviewPrompt = "Review the conversation above and consider saving to memory if appropriate.\n\n" +
 	"Focus on:\n" +
 	"1. Has the user revealed things about themselves — their persona, desires, " +
 	"preferences, or personal details worth remembering?\n" +
 	"2. Has the user expressed expectations about how you should behave, their work " +
-	"style, or ways they want you to operate?\n\n" +
+	"style, or ways they want you to operate?\n" +
+	"3. Did the user correct something you said based on USER PROFILE or MEMORY, or " +
+	"clarify how to interpret a profile entry (e.g. full name vs nickname, spelling " +
+	"preference)? Use memory(action=replace, target=user) to fix the stored entry — " +
+	"never leave ambiguous or wrong profile text on disk.\n\n" +
 	"If something stands out, save it using the memory tool. " +
 	"If nothing is worth saving, just say 'Nothing to save.' and stop."
 
@@ -130,7 +133,7 @@ const skillReviewPrompt = "Review the conversation above and update the skill li
 	"If you notice two existing skills that overlap, note it in your " +
 	"reply — the background curator handles consolidation at scale.\n\n" +
 	"Protected skills (DO NOT edit these):\n" +
-	"  • Bundled skills (shipped with Enough, e.g. 'enough').\n" +
+	"  • Bundled skills (shipped with Enough, e.g. 'enough-agent').\n" +
 	"  • Skills installed from external sources.\n" +
 	"Pinned skills (marked via /curator-pin) CAN be improved — " +
 	"pin only blocks deletion/archive/consolidation by the curator, not " +
@@ -166,8 +169,10 @@ const skillReviewPrompt = "Review the conversation above and update the skill li
 const combinedReviewPrompt = "Review the conversation above and update two things:\n\n" +
 	"**Memory**: who the user is. Did the user reveal persona, " +
 	"desires, preferences, personal details, or expectations about " +
-	"how you should behave? Save facts about the user and durable " +
-	"preferences with the memory tool.\n\n" +
+	"how you should behave? Did the user correct a misread of USER PROFILE or " +
+	"clarify name/spelling/nickname usage? Use memory replace on target=user to " +
+	"fix stored profile entries — not add duplicates. Save other durable facts with " +
+	"the memory tool.\n\n" +
 	"**Skills**: how to do this class of task. Be ACTIVE — most " +
 	"sessions produce at least one skill update. A pass that does " +
 	"nothing is a missed learning opportunity, not a neutral outcome.\n\n" +
@@ -214,7 +219,7 @@ const combinedReviewPrompt = "Review the conversation above and update two thing
 	"If you notice overlapping existing skills, mention it — the " +
 	"background curator handles consolidation.\n\n" +
 	"Protected skills (DO NOT edit these):\n" +
-	"  • Bundled skills (shipped with Enough, e.g. 'enough').\n" +
+	"  • Bundled skills (shipped with Enough, e.g. 'enough-agent').\n" +
 	"  • Skills installed from external sources.\n" +
 	"Pinned skills (marked via /curator-pin) CAN be improved — " +
 	"pin only blocks deletion/archive/consolidation by the curator, not " +
@@ -398,6 +403,15 @@ func (a *Agent) maybeSpawnBackgroundReview(shouldReviewMemory bool) {
 	go func() {
 		defer a.reviewWG.Done()
 		defer func() { _ = recover() }() // background review is best-effort
+		if notify != nil {
+			kind := "skill library"
+			if reviewMemory && !reviewSkills {
+				kind = "memory"
+			} else if reviewMemory && reviewSkills {
+				kind = "memory + skills"
+			}
+			notify("💾 Self-improvement review running (" + kind + ")…")
+		}
 		a.runBackgroundReview(cfg, cachedPrompt, snapshot, prompt, notify)
 	}()
 }
@@ -439,7 +453,8 @@ func (a *Agent) runBackgroundReview(
 		writeOrigin:        WriteOriginBackgroundReview,
 		cachedSystemPrompt: cachedPrompt,
 		maxIterations:      reviewMaxIterations,
-		swarmDepth:         maxSwarmDepth, // defensive: no nested swarms even if whitelisted
+		swarmDepth:         maxSwarmDepth,
+		notify:             notify,
 	}
 
 	review.messages = make([]opencode.Message, 0, len(snapshot)+2)
@@ -481,14 +496,27 @@ func summarizeReviewActions(reviewMessages []opencode.Message) []string {
 			continue
 		}
 		var data struct {
-			Success bool   `json:"success"`
-			Message string `json:"message"`
-			Target  string `json:"target"`
+			Success   bool   `json:"success"`
+			Staged    bool   `json:"staged"`
+			PendingID string `json:"pending_id"`
+			Gist      string `json:"gist"`
+			Message   string `json:"message"`
+			Target    string `json:"target"`
 		}
 		if err := json.Unmarshal([]byte(opencode.ContentString(msg)), &data); err != nil {
 			continue
 		}
 		if !data.Success {
+			continue
+		}
+		if data.Staged {
+			gist := strings.TrimSpace(data.Gist)
+			if gist == "" {
+				gist = strings.TrimSpace(data.Message)
+			}
+			if gist != "" {
+				add("staged: " + gist)
+			}
 			continue
 		}
 		lower := strings.ToLower(data.Message)

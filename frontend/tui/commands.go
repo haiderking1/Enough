@@ -138,12 +138,11 @@ func (a *App) handleSlash(input string) {
 				a.appendMessage("error", "Usage: /skills diff <id>")
 				return
 			}
-			r, err := approval.GetPending(approval.SubsystemSkills, subArg)
-			if err != nil || r == nil {
-				a.appendMessage("error", fmt.Sprintf("Staged update '%s' not found.", subArg))
+			diff, err := a.pendingWriteDiff(approval.SubsystemSkills, subArg)
+			if err != nil {
+				a.appendMessage("error", err.Error())
 				return
 			}
-			diff := approval.SkillPendingDiff(*r)
 			a.appendMessage("system", fmt.Sprintf("Staged update %s:\n%s", subArg, diff))
 			a.requestRender()
 			return
@@ -152,28 +151,12 @@ func (a *App) handleSlash(input string) {
 				a.appendMessage("error", "Usage: /skills approve <id>")
 				return
 			}
-			r, err := approval.GetPending(approval.SubsystemSkills, subArg)
-			if err != nil || r == nil {
-				a.appendMessage("error", fmt.Sprintf("Staged update '%s' not found.", subArg))
+			msg, err := a.approvePendingWrite(approval.SubsystemSkills, subArg)
+			if err != nil {
+				a.appendMessage("error", fmt.Sprintf("Failed to apply staged update: %s", err.Error()))
 				return
 			}
-			opts := skills.SkillManageOptions{
-				GuardEnabled:       true,
-				MarkCreatedAsAgent: r.Origin == "agent",
-			}
-			res, err := skills.ApplySkillPending(r.Payload, opts)
-			if err != nil || !res.Success {
-				errMsg := "Unknown error"
-				if err != nil {
-					errMsg = err.Error()
-				} else if res.Error != "" {
-					errMsg = res.Error
-				}
-				a.appendMessage("error", fmt.Sprintf("Failed to apply staged update: %s", errMsg))
-				return
-			}
-			_, _ = approval.DiscardPending(approval.SubsystemSkills, subArg)
-			a.appendMessage("system", fmt.Sprintf("Staged update %s approved and applied: %s", subArg, res.Message))
+			a.appendMessage("system", msg)
 			a.requestRender()
 			return
 		case "reject":
@@ -181,12 +164,12 @@ func (a *App) handleSlash(input string) {
 				a.appendMessage("error", "Usage: /skills reject <id>")
 				return
 			}
-			ok, err := approval.DiscardPending(approval.SubsystemSkills, subArg)
-			if err != nil || !ok {
-				a.appendMessage("error", fmt.Sprintf("Staged update '%s' not found.", subArg))
+			msg, err := a.rejectPendingWrite(approval.SubsystemSkills, subArg)
+			if err != nil {
+				a.appendMessage("error", err.Error())
 				return
 			}
-			a.appendMessage("system", fmt.Sprintf("Staged update %s rejected.", subArg))
+			a.appendMessage("system", msg)
 			a.requestRender()
 			return
 		case "approval":
@@ -393,29 +376,12 @@ func (a *App) handleSlash(input string) {
 				a.appendMessage("error", "Usage: /memory approve <id>")
 				return
 			}
-			r, err := approval.GetPending(approval.SubsystemMemory, subArg)
-			if err != nil || r == nil {
-				a.appendMessage("error", fmt.Sprintf("Staged update '%s' not found.", subArg))
-				return
-			}
-			cfg, err := config.LoadRuntime()
+			msg, err := a.approvePendingWrite(approval.SubsystemMemory, subArg)
 			if err != nil {
-				a.appendMessage("error", err.Error())
+				a.appendMessage("error", fmt.Sprintf("Failed to apply memory update: %s", err.Error()))
 				return
 			}
-			ag := a.ensureAgent(cfg)
-			store := ag.MemoryStore()
-			if store == nil {
-				a.appendMessage("error", "Memory store is not initialized or disabled.")
-				return
-			}
-			res := memory.ApplyMemoryPending(r.Payload, store)
-			if !res.Success {
-				a.appendMessage("error", fmt.Sprintf("Failed to apply memory update: %s", res.Error))
-				return
-			}
-			_, _ = approval.DiscardPending(approval.SubsystemMemory, subArg)
-			a.appendMessage("system", fmt.Sprintf("Staged update %s approved and applied: %s", subArg, r.Summary))
+			a.appendMessage("system", msg)
 			a.requestRender()
 			return
 		case "reject":
@@ -423,12 +389,42 @@ func (a *App) handleSlash(input string) {
 				a.appendMessage("error", "Usage: /memory reject <id>")
 				return
 			}
-			ok, err := approval.DiscardPending(approval.SubsystemMemory, subArg)
-			if err != nil || !ok {
-				a.appendMessage("error", fmt.Sprintf("Staged update '%s' not found.", subArg))
+			msg, err := a.rejectPendingWrite(approval.SubsystemMemory, subArg)
+			if err != nil {
+				a.appendMessage("error", err.Error())
 				return
 			}
-			a.appendMessage("system", fmt.Sprintf("Staged update %s rejected.", subArg))
+			a.appendMessage("system", msg)
+			a.requestRender()
+			return
+		case "approval":
+			cfg, err := config.Load()
+			if err != nil {
+				a.appendMessage("error", err.Error())
+				return
+			}
+			switch strings.ToLower(subArg) {
+			case "on":
+				cfg.Memory.WriteApproval = true
+				a.appendMessage("system", "Memory write approval enabled — memory tool writes will be staged.")
+			case "off":
+				cfg.Memory.WriteApproval = false
+				a.appendMessage("system", "Memory write approval disabled.")
+			default:
+				a.appendMessage("error", "Usage: /memory approval on|off")
+				return
+			}
+			if err := config.Save(cfg); err != nil {
+				a.appendMessage("error", err.Error())
+				return
+			}
+			if runCfg, err := config.LoadRuntime(); err == nil {
+				a.mu.Lock()
+				if a.agent != nil {
+					a.agent.UpdateConfig(runCfg)
+				}
+				a.mu.Unlock()
+			}
 			a.requestRender()
 			return
 		}

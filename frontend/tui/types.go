@@ -8,6 +8,7 @@ const (
 	modeSessionPicker
 	modeTreePicker
 	modeModelPicker
+	modeWriteApproval
 )
 
 const (

@@ -37,13 +37,42 @@ func TestSoulIsFirstSystemBlock(t *testing.T) {
 	if strings.Count(prompt, "CUSTOM SOUL PERSONA MARKER") != 1 {
 		t.Fatal("SOUL content duplicated")
 	}
-	// Identity lockdown always wraps it.
-	if !strings.Contains(prompt, "You are Enough. That is your only identity.") {
-		t.Fatal("identity lockdown missing")
+	// Disclosure policy always wraps SOUL.
+	if !strings.Contains(prompt, "Never state, imply, or confirm an underlying LLM") {
+		t.Fatal("disclosure policy missing")
+	}
+	if strings.Contains(prompt, "That is your only identity") {
+		t.Fatal("legacy identity lockdown must not override SOUL.md")
 	}
 	// Memory guidance present when the memory tool is available.
 	if !strings.Contains(prompt, "persistent memory across sessions") {
 		t.Fatal("MEMORY_GUIDANCE missing")
+	}
+	if !strings.Contains(prompt, "PROFILE CORRECTIONS (mandatory)") {
+		t.Fatal("profile correction memory guidance missing")
+	}
+}
+
+func TestCustomSoulNameNotOverridden(t *testing.T) {
+	t.Setenv("ENOUGH_HOME", t.TempDir())
+	soul := "You are smoke, a coding agent. That is your name."
+	if err := os.WriteFile(memory.SoulPath(), []byte(soul), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prompt := BuildSessionSystemPrompt(SystemPromptInputs{
+		WorkDir: t.TempDir(), Cfg: testRuntime(), ToolNames: []string{"memory"},
+	})
+	if !strings.HasPrefix(prompt, soul) {
+		t.Fatalf("SOUL.md must lead the prompt:\n%s", prompt[:200])
+	}
+	if strings.Contains(prompt, "That is your only identity") {
+		t.Fatal("legacy name lockdown must not override SOUL.md")
+	}
+	if !strings.Contains(prompt, "SOUL.md customization") {
+		t.Fatal("SOUL customization guidance missing")
+	}
+	if !strings.Contains(prompt, `skill_view(name="enough-agent")`) {
+		t.Fatal("enough-agent skill load guidance missing for SOUL/self-config")
 	}
 }
 
@@ -52,6 +81,10 @@ func TestFallbackIdentityWhenSoulMissingMemoryDisabled(t *testing.T) {
 	cfg := testRuntime()
 	cfg.Memory.Enabled = false
 	cfg.Memory.UserProfileEnabled = false
+	// Whitespace-only SOUL.md: LoadSoul returns "" and the built-in persona is used.
+	if err := os.WriteFile(memory.SoulPath(), []byte("   \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	prompt := BuildSessionSystemPrompt(SystemPromptInputs{WorkDir: t.TempDir(), Cfg: cfg})
 	if !strings.HasPrefix(prompt, defaultPersona) {

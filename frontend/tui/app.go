@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/enough/enough/backend/agent"
+	"github.com/enough/enough/backend/approval"
 	"github.com/enough/enough/backend/auth"
 	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/core"
@@ -104,6 +105,15 @@ type App struct {
 	lastActiveAt time.Time
 
 	preloadedSkills []string
+
+	writeApprovalSubsystem string
+	writeApprovalID        string
+	writeApprovalRecord    *approval.PendingRecord
+	writeApprovalShowDiff  bool
+	writeApprovalStatus    string
+	writeApprovalQueue     []writeApprovalItem
+
+	approvalPromptCh chan writeApprovalItem
 }
 
 func newApp(t *term.Terminal) *App {
@@ -116,6 +126,7 @@ func newApp(t *term.Terminal) *App {
 		lastActivityWordIndex: -1,
 		renderCh:              make(chan struct{}, 1),
 		notifyCh:              make(chan string, 16),
+		approvalPromptCh:      make(chan writeApprovalItem, 16),
 		modelRegistry:         opencode.NewRegistry(),
 		lastActiveAt:          time.Now(),
 	}
@@ -241,6 +252,10 @@ func (a *App) run() error {
 			a.bumpChat()
 			a.requestRender()
 
+		case item := <-a.approvalPromptCh:
+			a.promptWriteApproval(item)
+			a.requestRender()
+
 		case <-curatorTick.C:
 			a.mu.Lock()
 			running := a.running
@@ -309,6 +324,7 @@ func (a *App) ensureAgent(cfg config.Runtime) *agent.Agent {
 	if a.agent == nil {
 		a.agent = agent.New(cfg, "", a.session)
 		a.agent.SetNotify(a.notifyAsync)
+		a.agent.SetApprovalPrompt(a.approvalPromptAsync)
 		return a.agent
 	}
 	a.agent.UpdateConfig(cfg)
@@ -377,6 +393,13 @@ func (a *App) handleKey(k parsedKey) bool {
 	if k.action == keyEscape {
 		a.handleInterrupt()
 		a.requestRender()
+		return false
+	}
+
+	if mode == modeWriteApproval {
+		if a.handleWriteApprovalKey(k) {
+			return false
+		}
 		return false
 	}
 
@@ -458,7 +481,7 @@ func (a *App) handleKey(k parsedKey) bool {
 		}
 	}
 
-	if !running && a.mode != modeSessionPicker && a.mode != modeModelPicker {
+	if !running && a.mode != modeSessionPicker && a.mode != modeModelPicker && a.mode != modeWriteApproval {
 		switch k.action {
 		case keyShiftTab:
 			a.cycleThinkingLevel()
@@ -475,7 +498,7 @@ func (a *App) handleKey(k parsedKey) bool {
 		}
 	}
 
-	if k.action == keyEnter && (!running || a.compacting) && a.mode != modeSessionPicker && a.mode != modeModelPicker {
+	if k.action == keyEnter && (!running || a.compacting) && a.mode != modeSessionPicker && a.mode != modeModelPicker && a.mode != modeWriteApproval {
 		a.handleSubmit()
 		a.requestRender()
 		return false
@@ -548,6 +571,13 @@ func (a *App) buildLines() (out []string, stablePrefix int) {
 		out = append(out, clampSplitLines(strings.Split(picker, "\n"), w)...)
 	}
 
+	if picker := a.renderWriteApprovalPicker(w); picker != "" {
+		if len(out) > 0 {
+			out = append(out, "")
+		}
+		out = append(out, clampSplitLines(strings.Split(picker, "\n"), w)...)
+	}
+
 	if a.mode == modeTreePicker {
 		if picker := a.renderTreePicker(w); picker != "" {
 			if len(out) > 0 {
@@ -602,6 +632,12 @@ func (a *App) renderTaskInput() string {
 			return prompt + a.styles.InputCaret.Render("▎") + a.styles.InputHint.Render(connectPlaceholder)
 		}
 		return a.renderTypedLine(prompt, runes, cursor)
+	}
+
+	if a.mode == modeWriteApproval {
+		prompt := a.styles.InputPrompt.Render("❯ ")
+		hint := "y approve · n reject · d diff · esc later"
+		return prompt + a.styles.InputCaret.Render("▎") + "  " + a.styles.InputHint.Render(hint)
 	}
 
 	prompt := a.styles.InputPrompt.Render("❯ ")

@@ -284,6 +284,15 @@ func findSkillDir(name string) string {
 	return foundDir
 }
 
+func IsAgentCreated(name string) bool {
+	um := LoadUsage()
+	rec, ok := um[name]
+	if !ok || rec.CreatedBy == nil || *rec.CreatedBy != "agent" {
+		return false
+	}
+	return findSkillDir(name) != ""
+}
+
 func ListAgentCreatedSkillNames() []string {
 	um := LoadUsage()
 	var names []string

@@ -7,6 +7,83 @@ import (
 	"strings"
 )
 
+func pathFromToolArgs(argsJSON string) string {
+	var args struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(args.Path)
+}
+
+func resolveToolFilePath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if path == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Clean(home)
+		}
+		return ""
+	}
+	if strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			path = filepath.Join(home, path[2:])
+		}
+	}
+	if !filepath.IsAbs(path) {
+		if cwd, err := os.Getwd(); err == nil {
+			path = filepath.Join(cwd, path)
+		}
+	}
+	return filepath.Clean(path)
+}
+
+// readFileForDiff returns the current file contents. ok is false only when the
+// path cannot be resolved or read for a reason other than missing file.
+func readFileForDiff(pathArg string) (content string, ok bool) {
+	path := resolveToolFilePath(pathArg)
+	if path == "" {
+		return "", false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", true
+		}
+		return "", false
+	}
+	return string(data), true
+}
+
+// finalizeFileToolDiff compares a snapshot taken at tool start with the file on
+// disk after the tool finishes. This is the only accurate source for edit_file
+// line counts — previewing from old_string/new_string fails when the model passes
+// stale context or when multiple edits hit the same file in one turn.
+func finalizeFileToolDiff(toolName, argsJSON, before string, toolError bool) (added, removed int) {
+	if toolError {
+		return 0, 0
+	}
+
+	path := pathFromToolArgs(argsJSON)
+	after, ok := readFileForDiff(path)
+	if !ok && toolName == "write_file" {
+		var args struct {
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal([]byte(argsJSON), &args); err == nil {
+			return lineDiff(before, args.Content)
+		}
+		return 0, 0
+	}
+	if !ok {
+		return 0, 0
+	}
+	return lineDiff(before, after)
+}
+
 func diffWriteFile(argsJSON string) (added, removed int) {
 	var args struct {
 		Path    string `json:"path"`
@@ -16,65 +93,11 @@ func diffWriteFile(argsJSON string) (added, removed int) {
 		return 0, 0
 	}
 
-	path := args.Path
-	if !filepath.IsAbs(path) {
-		if cwd, err := os.Getwd(); err == nil {
-			path = filepath.Join(cwd, path)
-		}
+	before, ok := readFileForDiff(args.Path)
+	if !ok {
+		return countLines(args.Content), 0
 	}
-
-	old := ""
-	if data, err := os.ReadFile(path); err == nil {
-		old = string(data)
-	}
-	return lineDiff(old, args.Content)
-}
-
-func diffEditFile(argsJSON string) (added, removed int) {
-	var args struct {
-		Path       string `json:"path"`
-		OldString  string `json:"old_string"`
-		NewString  string `json:"new_string"`
-		ReplaceAll bool   `json:"replace_all"`
-	}
-	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
-		return 0, 0
-	}
-
-	path := args.Path
-	if !filepath.IsAbs(path) {
-		if cwd, err := os.Getwd(); err == nil {
-			path = filepath.Join(cwd, path)
-		}
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return countLines(args.NewString), countLines(args.OldString)
-	}
-
-	newContent, _, err := applyEditPreview(string(data), args.OldString, args.NewString, args.ReplaceAll)
-	if err != nil {
-		return countLines(args.NewString), countLines(args.OldString)
-	}
-	return lineDiff(string(data), newContent)
-}
-
-func applyEditPreview(content, old, new string, replaceAll bool) (string, int, error) {
-	if old == "" {
-		return "", 0, nil
-	}
-	count := strings.Count(content, old)
-	if count == 0 {
-		return "", 0, nil
-	}
-	if !replaceAll {
-		if count > 1 {
-			return "", 0, nil
-		}
-		return strings.Replace(content, old, new, 1), 1, nil
-	}
-	return strings.Replace(content, old, new, -1), count, nil
+	return lineDiff(before, args.Content)
 }
 
 func lineDiff(old, new string) (added, removed int) {

@@ -16,8 +16,8 @@ import (
 // session and replayed verbatim every turn so the upstream prefix cache stays
 // warm:
 //
-//   - stable   — identity (SOUL.md or built-in persona, always wrapped by the
-//     Enough identity lockdown), memory guidance, skills guidance, skills
+//   - stable   — identity (SOUL.md or built-in persona, plus disclosure policy
+//     and SOUL customization rules), memory guidance, skills guidance, skills
 //     index.
 //   - context  — project context files (AGENTS.md) discovered under the
 //     working directory.
@@ -54,7 +54,17 @@ const MemoryGuidance = "You have persistent memory across sessions. Save durable
 	"'Project uses pytest with xdist' ✓ — 'Run tests with pytest -n 4' ✗. " +
 	"Imperative phrasing gets re-read as a directive in later sessions and can " +
 	"cause repeated work or override the user's current request. Procedures and " +
-	"workflows belong in skills, not memory."
+	"workflows belong in skills, not memory.\n" +
+	"CRITICAL: To save anything, you MUST call the memory tool in the same turn. " +
+	"Never tell the user you will remember something, or that you have remembered it, " +
+	"unless the memory tool returned success in this turn (or a staged pending write).\n" +
+	"PROFILE CORRECTIONS (mandatory): USER PROFILE in your prompt is a frozen session " +
+	"snapshot — it can be wrong or ambiguous. When the user corrects how you addressed " +
+	"them, how you interpreted profile text, or any fact you stated from memory/profile, " +
+	"call memory(action=replace, target=user, ...) in the same turn before finishing your " +
+	"reply. Apologizing alone leaves the wrong entry on disk and the mistake repeats next " +
+	"session. Spelling notes like 'lowercase h' mean write the full name that way (e.g. " +
+	"'haider') — not a nickname from the initial letter."
 
 const contextFileMaxChars = 24000
 
@@ -91,21 +101,12 @@ func BuildSessionSystemPrompt(in SystemPromptInputs) string {
 func buildStableTier(in SystemPromptInputs) string {
 	var parts []string
 
-	// Identity: SOUL.md replaces the default persona when present, but the
-	// identity lockdown + operating rules always apply (SOUL is scanned for
+	// Identity: SOUL.md replaces the default persona when present. Disclosure
+	// policy and SOUL customization rules always follow (SOUL is scanned for
 	// prompt injection before inject and appears exactly once).
-	soul := ""
-	if in.Cfg.Memory.Enabled || in.Cfg.Memory.UserProfileEnabled {
-		soul = memory.LoadSoul()
-	} else {
-		// SOUL.md is identity, not memory — load it regardless, but only
-		// seed the default file when the memory stack is on.
-		if data, err := os.ReadFile(memory.SoulPath()); err == nil && strings.TrimSpace(string(data)) != "" {
-			soul = memory.LoadSoul()
-		}
-	}
+	soul := memory.LoadSoul()
 	if soul != "" {
-		parts = append(parts, soul, identityLockdown, agentRules)
+		parts = append(parts, soul, disclosurePolicy, enoughHelpGuidance, soulCustomization, agentRules)
 	} else {
 		parts = append(parts, systemPrompt)
 	}

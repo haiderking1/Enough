@@ -113,6 +113,19 @@ func ListPending(subsystem string) ([]PendingRecord, error) {
 	return records, nil
 }
 
+// PendingTotalCount returns staged skill + memory writes awaiting approval.
+func PendingTotalCount() int {
+	total := 0
+	for _, sub := range []string{SubsystemSkills, SubsystemMemory} {
+		recs, err := ListPending(sub)
+		if err != nil {
+			continue
+		}
+		total += len(recs)
+	}
+	return total
+}
+
 func GetPending(subsystem string, pendingID string) (*PendingRecord, error) {
 	path := filepath.Join(PendingDir(subsystem), pendingID+".json")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -253,6 +266,32 @@ func extractDescriptionQuick(content string) string {
 		desc = desc[:137] + "..."
 	}
 	return desc
+}
+
+func MemoryPendingDiff(record PendingRecord) string {
+	payload := record.Payload
+	action := getStringField(payload, "action")
+	target := getStringField(payload, "target")
+	if target == "" {
+		target = "memory"
+	}
+	content := getStringField(payload, "content")
+	match := getStringField(payload, "match")
+	replacement := getStringField(payload, "replacement")
+
+	switch action {
+	case "add":
+		return fmt.Sprintf("add to %s:\n+%s", target, content)
+	case "replace":
+		return fmt.Sprintf("replace in %s (match %q):\n-%s\n+%s", target, match, match, replacement)
+	case "remove":
+		return fmt.Sprintf("remove from %s (match %q)", target, match)
+	default:
+		if summary := strings.TrimSpace(record.Summary); summary != "" {
+			return summary
+		}
+		return fmt.Sprintf("(%s on %s)", action, target)
+	}
 }
 
 func SkillPendingDiff(record PendingRecord) string {

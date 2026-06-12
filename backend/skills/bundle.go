@@ -6,21 +6,23 @@ import (
 	"path/filepath"
 )
 
-//go:embed enough_skill/SKILL.md
-var enoughSkillBundle []byte
+//go:embed bundled/autonomous-ai-agents/enough-agent/SKILL.md
+var agentReferenceSkill []byte
 
-// ExtractEnoughSkillIfMissing ensures the default "enough" skill is written to ~/.enough/skills/enough/SKILL.md
+// ExtractEnoughSkillIfMissing ensures the canonical enough-agent reference skill
+// exists under ~/.enough/skills/ (SyncSkills is the primary path; this is a
+// lightweight fallback for first-run before sync completes).
 func ExtractEnoughSkillIfMissing() error {
-	dir := filepath.Join(SkillsDir(), "enough")
+	dir := filepath.Join(SkillsDir(), "autonomous-ai-agents", "enough-agent")
 	target := filepath.Join(dir, "SKILL.md")
 
 	if _, err := os.Stat(target); err == nil {
-		return nil // Already exists
+		return nil
 	}
 
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 
-	return os.WriteFile(target, enoughSkillBundle, 0644)
+	return os.WriteFile(target, agentReferenceSkill, 0o644)
 }
