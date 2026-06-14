@@ -294,6 +294,13 @@ func (a *Agent) UpdateConfig(cfg config.Runtime) {
 // change is a prompt-affecting boundary, so the cached system prompt is
 // invalidated; routine changes (model, thinking level) leave it untouched.
 func (a *Agent) applyConfigLocked(cfg config.Runtime) {
+	// Re-applying identical config (every turn, and on each ensureAgent) is a
+	// no-op: skip it to avoid a pointless client rebuild and, crucially, to not
+	// write a.cfg — an unchanged write would still race readers of an in-flight
+	// turn under the -race detector.
+	if reflect.DeepEqual(a.cfg, cfg) {
+		return
+	}
 	promptAffecting := !reflect.DeepEqual(a.cfg.Memory, cfg.Memory) ||
 		!reflect.DeepEqual(a.cfg.Skills, cfg.Skills)
 	a.cfg = cfg
@@ -365,14 +372,14 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 	a.hydrateNudgeCountersLocked()
 	a.userTurnCount++
 	shouldReviewMemory := false
-	if a.cfg.Memory.NudgeInterval > 0 && a.memStore != nil && a.cfg.Memory.Enabled {
+	if cfg.Memory.NudgeInterval > 0 && a.memStore != nil && cfg.Memory.Enabled {
 		a.turnsSinceMemory++
-		if a.turnsSinceMemory >= a.cfg.Memory.NudgeInterval {
+		if a.turnsSinceMemory >= cfg.Memory.NudgeInterval {
 			shouldReviewMemory = true
 			a.turnsSinceMemory = 0
 		}
 	}
-	if a.cfg.Memory.Enabled && a.cfg.Memory.UserProfileEnabled && a.memStore != nil &&
+	if cfg.Memory.Enabled && cfg.Memory.UserProfileEnabled && a.memStore != nil &&
 		userMessageSignalsProfileCorrection(userText) {
 		shouldReviewMemory = true
 	}
@@ -389,11 +396,11 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 	a.parallelForksAttempted = false
 	a.step = stepTracker{}
 	a.completionRounds = 0
-	if a.cfg.Evidence.Enabled {
+	if cfg.Evidence.Enabled {
 		verifyCmd := obligations.DetectVerifyCommand(a.workDir)
 		taskVerify := obligations.ExtractTaskVerifyCommands(userText)
 		a.obligations = obligations.NewRegistry(turnID, verifyCmd, taskVerify,
-			a.cfg.Evidence.StrictVerifyReset, a.cfg.Evidence.VerifierEnabled)
+			cfg.Evidence.StrictVerifyReset, cfg.Evidence.VerifierEnabled)
 	} else {
 		a.obligations = nil
 	}
@@ -402,12 +409,12 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 	// Session continuity: silently restore read credit for files this agent
 	// authored in prior turns, iff their on-disk content is unchanged. The
 	// guard stays hostile to everything else.
-	if a.cfg.Evidence.Enabled && a.cfg.Evidence.ContinuityEnabled() && a.session != nil {
+	if cfg.Evidence.Enabled && cfg.Evidence.ContinuityEnabled() && a.session != nil {
 		evidence.SeedContinuityReads(a.evidenceLedger(), sessionFingerprints(a.session))
 	}
 
 	// Pre-prompt compaction check
-	if a.session != nil && a.cfg.Compaction.Enabled {
+	if a.session != nil && cfg.Compaction.Enabled {
 		pathEntries := a.session.GetBranch(a.session.LeafID())
 		compactionEntry := session.GetLatestCompactionEntry(pathEntries)
 
@@ -430,10 +437,10 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 		}
 
 		if !skip {
-			contextWindow := ModelContextWindow(a.cfg.Provider, a.cfg.Model, a.cfg.Compaction.ContextWindow)
+			contextWindow := ModelContextWindow(cfg.Provider, cfg.Model, cfg.Compaction.ContextWindow)
 			sessionMsgs := a.session.BuildSessionContext().Messages
 			tokens := session.EstimateContextTokens(sessionMsgs).Tokens
-			if session.ShouldCompact(tokens, contextWindow, a.cfg.Compaction) {
+			if session.ShouldCompact(tokens, contextWindow, cfg.Compaction) {
 				_, _ = a.RunAutoCompaction(ctx, "threshold", false)
 			}
 		}
@@ -456,7 +463,7 @@ func (a *Agent) Prompt(ctx context.Context, cfg config.Runtime, userText string,
 
 	a.persist(userMsg)
 
-	if a.cfg.Evidence.Enabled && a.cfg.Evidence.GoalLockEnabled() {
+	if cfg.Evidence.Enabled && cfg.Evidence.GoalLockEnabled() {
 		lockMsg := opencode.Message{
 			Role:    "user",
 			Content: opencode.StringContent(goalLockNotice(userText)),
@@ -634,7 +641,7 @@ func (a *Agent) runLoop(ctx context.Context) error {
 			}
 
 			// Perform post-turn compaction check
-			if a.session != nil && a.cfg.Compaction.Enabled {
+			if a.session != nil && cfg.Compaction.Enabled {
 				pathEntries := a.session.GetBranch(a.session.LeafID())
 				compactionEntry := session.GetLatestCompactionEntry(pathEntries)
 
@@ -656,7 +663,7 @@ func (a *Agent) runLoop(ctx context.Context) error {
 				}
 
 				if !skip {
-					contextWindow := ModelContextWindow(a.cfg.Provider, a.cfg.Model, a.cfg.Compaction.ContextWindow)
+					contextWindow := ModelContextWindow(cfg.Provider, cfg.Model, cfg.Compaction.ContextWindow)
 					var tokens int
 					if msg.Usage != nil {
 						tokens = session.CalculateContextTokens(*msg.Usage)
@@ -686,7 +693,7 @@ func (a *Agent) runLoop(ctx context.Context) error {
 						}
 					}
 
-					if !skip && session.ShouldCompact(tokens, contextWindow, a.cfg.Compaction) {
+					if !skip && session.ShouldCompact(tokens, contextWindow, cfg.Compaction) {
 						_, _ = a.RunAutoCompaction(ctx, "threshold", false)
 					}
 				}
@@ -698,7 +705,7 @@ func (a *Agent) runLoop(ctx context.Context) error {
 		a.mu.Lock()
 		a.messages = append(a.messages, msg)
 		// Tool iteration — feeds the background skill-review nudge.
-		if a.cfg.Memory.SkillNudgeInterval > 0 {
+		if cfg.Memory.SkillNudgeInterval > 0 {
 			a.itersSinceSkill++
 		}
 		a.mu.Unlock()
