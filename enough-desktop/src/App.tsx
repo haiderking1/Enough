@@ -528,6 +528,7 @@ export default function App() {
           <ChatWorkspace
             loadingThread={loadingThread}
             messages={messages}
+            sessionId={currentSessionId}
             currentCwd={currentCwd}
             modelCatalog={modelCatalog}
             isStreaming={isStreaming}

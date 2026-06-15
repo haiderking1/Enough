@@ -1,14 +1,80 @@
-import { memo } from "react"
+import { memo, useCallback, useEffect, useLayoutEffect, useRef } from "react"
 import type { Message } from "../types"
 import { MarkdownContent } from "./markdown-content"
 import { ToolBlock } from "./tool-block"
 import { ThinkingBlock } from "./thinking-block"
 import { TodoBlock } from "./todo-block"
 
-export const ChatView = memo(function ChatView({ messages }: { messages: Message[] }) {
+const BOTTOM_THRESHOLD_PX = 80
+
+interface ChatViewProps {
+  messages: Message[]
+  sessionId: string | null
+  isStreaming: boolean
+}
+
+export const ChatView = memo(function ChatView({ messages, sessionId, isStreaming }: ChatViewProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const pinnedToBottomRef = useRef(true)
+  const ignoreScrollRef = useRef(false)
+
+  const isNearBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return true
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_THRESHOLD_PX
+  }, [])
+
+  const scrollToBottom = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    ignoreScrollRef.current = true
+    el.scrollTop = el.scrollHeight
+    requestAnimationFrame(() => {
+      ignoreScrollRef.current = false
+      pinnedToBottomRef.current = isNearBottom()
+    })
+  }, [isNearBottom])
+
+  const handleScroll = useCallback(() => {
+    if (ignoreScrollRef.current) return
+    pinnedToBottomRef.current = isNearBottom()
+  }, [isNearBottom])
+
+  // New session — land at latest messages.
+  useLayoutEffect(() => {
+    pinnedToBottomRef.current = true
+    scrollToBottom()
+  }, [sessionId, scrollToBottom])
+
+  // New tokens / messages — follow only while pinned; sending always pins.
+  useLayoutEffect(() => {
+    const last = messages[messages.length - 1]
+    if (last?.role === "user") {
+      pinnedToBottomRef.current = true
+    }
+    if (pinnedToBottomRef.current) {
+      scrollToBottom()
+    }
+  }, [messages, isStreaming, scrollToBottom])
+
+  // Markdown / tools grow after paint — keep up while pinned.
+  useEffect(() => {
+    const content = contentRef.current
+    if (!content) return
+
+    const ro = new ResizeObserver(() => {
+      if (pinnedToBottomRef.current) {
+        scrollToBottom()
+      }
+    })
+    ro.observe(content)
+    return () => ro.disconnect()
+  }, [sessionId, scrollToBottom])
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="w-full px-6 pt-6 pb-36">
+    <div ref={scrollRef} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={contentRef} className="w-full px-6 pt-6 pb-36">
         <div className="space-y-6">
           {messages.map((m) => (
             <MessageRow key={m.id} message={m} />

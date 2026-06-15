@@ -9,6 +9,7 @@ import { PromptInput } from "./prompt-input"
 interface ChatWorkspaceProps {
   loadingThread: boolean
   messages: Message[]
+  sessionId: string | null
   currentCwd: string
   modelCatalog: ModelCatalog | null
   isStreaming: boolean
@@ -21,6 +22,7 @@ interface ChatWorkspaceProps {
 export const ChatWorkspace = memo(function ChatWorkspace({
   loadingThread,
   messages,
+  sessionId,
   currentCwd,
   modelCatalog,
   isStreaming,
@@ -54,7 +56,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
         <EmptyState cwd={currentCwd} composer={composer} />
       ) : (
         <>
-          <ChatView messages={messages} />
+          <ChatView messages={messages} sessionId={sessionId} isStreaming={streaming} />
           <div className="absolute bottom-0 left-0 right-0 pointer-events-none bg-gradient-to-t from-background via-background/95 to-transparent pt-10 pb-4">
             <div className="w-full px-6 pointer-events-auto">{composer}</div>
           </div>
