@@ -1,10 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { PanelLeft } from "lucide-react"
 import { Sidebar } from "./components/sidebar"
-import { ChatView } from "./components/chat-view"
-import { EmptyState } from "./components/empty-state"
-import { PromptInput } from "./components/prompt-input"
-import { StatusBar } from "./components/status-bar"
+import { ChatWorkspace } from "./components/chat-workspace"
 import TaskSidebar from "./components/TaskSidebar"
 import TerminalPanel from "./components/TerminalPanel"
 import SettingsPanel from "./components/SettingsPanel"
@@ -16,18 +13,13 @@ import {
   type AgentEvent,
   type AgentModel,
   type AgentSessionInfo,
+  type ModelCatalog,
   mapAssistantContent,
   assistantContentFromEvent,
   mapMessages,
 } from "./agent/rpc"
 
-const applyZoom = (level: number) => {
-  try {
-    window.enough?.setZoom(level)
-  } catch (err) {
-    console.error("Failed to set zoom:", err)
-  }
-}
+import { bumpZoom, initZoom, resetZoom, ZOOM_STEP } from "./lib/zoom"
 
 const send = (command: Record<string, unknown>) => enoughAgent.send(command)
 
@@ -55,6 +47,7 @@ export default function App() {
 
   // Live agent state
   const [model, setModel] = useState<AgentModel | null>(null)
+  const [modelCatalog, setModelCatalog] = useState<ModelCatalog | null>(null)
   const [availableModels, setAvailableModels] = useState<AgentModel[]>([])
   const [sessionList, setSessionList] = useState<AgentSessionInfo[]>(() =>
     loadJSON<AgentSessionInfo[]>("enough-session-cache", []),
@@ -83,16 +76,11 @@ export default function App() {
     loadJSON<string[]>("enough-hidden-threads-v2", []),
   )
 
-  const [zoom, setZoom] = useState(() => {
-    const saved = localStorage.getItem("enough-zoom")
-    return saved ? parseFloat(saved) : 1.0
-  })
-
-  // Persist zoom changes
+  // Zoom is applied via webFrame directly — not React state — so ctrl+scroll
+  // doesn't re-render (and re-parse) the entire chat transcript.
   useEffect(() => {
-    localStorage.setItem("enough-zoom", zoom.toString())
-    applyZoom(zoom)
-  }, [zoom])
+    initZoom()
+  }, [])
 
   // Global Ctrl/Cmd shortcuts (search & zoom)
   useEffect(() => {
@@ -107,13 +95,13 @@ export default function App() {
         } else if (canZoom) {
           if (e.key === "=" || e.key === "+") {
             e.preventDefault()
-            setZoom((prev) => Math.min(prev + 0.05, 2.5))
+            bumpZoom(ZOOM_STEP)
           } else if (e.key === "-") {
             e.preventDefault()
-            setZoom((prev) => Math.max(prev - 0.05, 0.5))
+            bumpZoom(-ZOOM_STEP)
           } else if (e.key === "0") {
             e.preventDefault()
-            setZoom(1.0)
+            resetZoom()
           }
         }
       }
@@ -122,8 +110,7 @@ export default function App() {
     const handleWheel = (e: WheelEvent) => {
       if (canZoom && (e.ctrlKey || e.metaKey)) {
         e.preventDefault()
-        const zoomDelta = e.deltaY < 0 ? 0.05 : -0.05
-        setZoom((prev) => Math.min(Math.max(prev + zoomDelta, 0.5), 2.5))
+        bumpZoom(e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)
       }
     }
 
@@ -195,7 +182,7 @@ export default function App() {
             // when we switch into a new one.
             setAddedProjects((prev) => (prev.includes(cwd) ? prev : [...prev, cwd]))
           }
-          send({ type: "get_available_models" })
+          send({ type: "get_model_catalog" })
           send({ type: "get_state" })
           send({ type: "get_messages" })
           // Defer sidebar refresh so the active thread can render first.
@@ -240,6 +227,22 @@ export default function App() {
             case "get_available_models":
               setAvailableModels(event.data.models)
               break
+            case "get_model_catalog": {
+              const catalog = event.data
+              setModelCatalog(catalog)
+              setAvailableModels(catalog.models)
+              const s = catalog.state
+              if (s.modelId) {
+                setModel({
+                  id: s.modelId,
+                  name: s.modelName,
+                  provider: s.provider,
+                  contextLabel: s.contextLabel,
+                  reasoning: s.reasoning,
+                })
+              }
+              break
+            }
             case "list_sessions": {
               const sessions = event.data.sessions
               setSessionList(sessions)
@@ -255,9 +258,18 @@ export default function App() {
               setSyncingThread(false)
               break
             }
-            case "set_model":
-              setModel(event.data)
+            case "set_model": {
+              const s = event.data
+              setModel({
+                id: s.modelId,
+                name: s.modelName,
+                provider: s.provider,
+                contextLabel: s.contextLabel,
+                reasoning: s.reasoning,
+              })
+              setModelCatalog((prev) => (prev ? { ...prev, state: s } : prev))
               break
+            }
             case "switch_session":
             case "new_session": {
               // Session is live — fetch transcript. Skip list_sessions here; it
@@ -411,14 +423,26 @@ export default function App() {
     send({ type: "new_session", cwd: dir })
   }, [])
 
-  const handleSelectModel = useCallback((m: AgentModel) => {
-    send({ type: "set_model", provider: m.provider, modelId: m.id })
+  const handleSelectModel = useCallback((provider: string, modelId: string, thinkingLevel: string) => {
+    send({ type: "set_model", provider, modelId, thinkingLevel })
   }, [])
+
+  const handleSettingsModel = useCallback(
+    (m: AgentModel) => {
+      const levels = m.thinkingLevels ?? []
+      const thinking =
+        modelCatalog?.state.thinkingLevel && levels.includes(modelCatalog.state.thinkingLevel)
+          ? modelCatalog.state.thinkingLevel
+          : levels.includes("medium")
+            ? "medium"
+            : levels.find((l) => l !== "off") ?? ""
+      send({ type: "set_model", provider: m.provider, modelId: m.id, thinkingLevel: thinking })
+    },
+    [modelCatalog?.state.thinkingLevel],
+  )
 
   const current = sessionList.find((s) => s.id === currentSessionId)
   const currentCwd = current?.cwd ?? projectCwd ?? "~"
-  const modelLabel = model?.name ?? "…"
-  const showEmpty = messages.length === 0
 
   // The sidebar is session-derived. Persisted project folders are only used
   // for picker state, not as fake empty buckets in the thread list.
@@ -503,36 +527,17 @@ export default function App() {
       )}
       <main className="flex min-w-0 flex-1 overflow-hidden bg-background">
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="relative flex min-h-0 flex-1 flex-col">
-            {loadingThread ? (
-              <div className="flex min-h-0 flex-1 items-center justify-center">
-                <span className="block h-5 w-5 rounded-full border-2 border-muted-foreground/30 border-t-foreground animate-spin [animation-duration:0.9s]" />
-              </div>
-            ) : showEmpty ? (
-              <EmptyState
-                cwd={currentCwd}
-                model={modelLabel}
-                isStreaming={isStreaming}
-                onSend={handleSend}
-                onAbort={handleAbort}
-                onToggleTasks={() => setTaskSidebarOpen((o) => !o)}
-              />
-            ) : (
-              <>
-                <ChatView messages={messages} />
-                <div className="absolute bottom-0 left-0 right-0 pointer-events-none bg-gradient-to-t from-background via-background/95 to-transparent pt-10 pb-4">
-                  <div className="w-full px-6 pb-2 pointer-events-auto">
-                    <PromptInput onSend={handleSend} isStreaming={isStreaming} onAbort={handleAbort} />
-                  </div>
-                  <StatusBar
-                    model={modelLabel}
-                    isStreaming={isStreaming || syncingThread}
-                    onToggleTasks={() => setTaskSidebarOpen((o) => !o)}
-                  />
-                </div>
-              </>
-            )}
-          </div>
+          <ChatWorkspace
+            loadingThread={loadingThread}
+            messages={messages}
+            currentCwd={currentCwd}
+            modelCatalog={modelCatalog}
+            isStreaming={isStreaming}
+            syncingThread={syncingThread}
+            onSend={handleSend}
+            onAbort={handleAbort}
+            onSelectModel={handleSelectModel}
+          />
           <TerminalPanel open={terminalOpen} />
         </div>
         <TaskSidebar open={taskSidebarOpen} onClose={() => setTaskSidebarOpen(false)} />
@@ -543,7 +548,7 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         models={availableModels}
         currentModelId={model?.id ?? null}
-        onSelectModel={handleSelectModel}
+        onSelectModel={handleSettingsModel}
       />
 
       <SearchModal

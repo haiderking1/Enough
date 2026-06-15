@@ -1,9 +1,12 @@
 import type {
   AgentEvent,
   AgentModel,
+  AgentProvider,
   AgentSessionInfo,
   AgentSessionState,
   ContentPart,
+  ModelCatalog,
+  ModelSelectionState,
   RawMessage,
 } from "./rpc"
 import type { ToolVerb } from "../types"
@@ -37,10 +40,18 @@ interface BackendHistoryMessage {
   tools?: BackendHistoryTool[]
 }
 
+interface BackendModelsCatalog {
+  type: "models.catalog"
+  providers: AgentProvider[]
+  models: AgentModel[]
+  state: ModelSelectionState
+}
+
 type BackendMessage =
   | { type: "ready" }
   | { type: "session.list"; sessions: BackendSession[] | null }
   | { type: "session.history"; sessionId: string; messages: BackendHistoryMessage[] | null }
+  | BackendModelsCatalog
   | { type: "token"; text?: string }
   | {
       type: "tool"
@@ -56,17 +67,32 @@ type BackendMessage =
 const WS_URL = import.meta.env.VITE_ENOUGH_WS || "ws://127.0.0.1:8754"
 const DEFAULT_CWD = "Enough"
 
-const model: AgentModel = {
-  id: "enough",
-  name: "Enough",
-  provider: "local",
-}
+const emptyCatalog = (): ModelCatalog => ({
+  providers: [],
+  models: [],
+  state: {
+    provider: "",
+    modelId: "",
+    modelName: "…",
+    thinkingLevel: "",
+  },
+})
 
 const nowIso = () => new Date().toISOString()
 
 function commandText(command: Record<string, unknown>, key: string) {
   const value = command[key]
   return typeof value === "string" ? value : ""
+}
+
+function stateToModel(state: ModelSelectionState): AgentModel {
+  return {
+    id: state.modelId,
+    name: state.modelName,
+    provider: state.provider,
+    contextLabel: state.contextLabel,
+    reasoning: state.reasoning,
+  }
 }
 
 function toolVerb(name: string): ToolVerb {
@@ -147,6 +173,7 @@ class EnoughClient {
   private streaming = false
   private streamText = ""
   private streamTools = new Map<string, ContentPart>()
+  private catalog: ModelCatalog = emptyCatalog()
 
   onEvent(listener: Listener) {
     this.listeners.add(listener)
@@ -161,7 +188,15 @@ class EnoughClient {
 
     switch (command.type) {
       case "get_available_models":
-        this.emit({ type: "response", command: "get_available_models", success: true, data: { models: [model] } })
+        this.emit({
+          type: "response",
+          command: "get_available_models",
+          success: true,
+          data: { models: this.catalog.models },
+        })
+        break
+      case "get_model_catalog":
+        this.sendWs({ type: "listModels" })
         break
       case "get_state":
         this.emit({ type: "response", command: "get_state", success: true, data: this.state() })
@@ -204,7 +239,12 @@ class EnoughClient {
         this.emit({ type: "agent_end" })
         break
       case "set_model":
-        this.emit({ type: "response", command: "set_model", success: true, data: model })
+        this.sendWs({
+          type: "setModel",
+          provider: commandText(command, "provider"),
+          model: commandText(command, "modelId"),
+          thinkingLevel: commandText(command, "thinkingLevel"),
+        })
         break
     }
   }
@@ -221,6 +261,7 @@ class EnoughClient {
     this.ws.onopen = () => {
       this.emit({ type: "bridge_ready" })
       this.sendWs({ type: "listSessions" })
+      this.sendWs({ type: "listModels" })
     }
 
     this.ws.onmessage = (event) => {
@@ -248,9 +289,23 @@ class EnoughClient {
     }
   }
 
+  private applyCatalog(catalog: ModelCatalog) {
+    this.catalog = catalog
+    this.emit({ type: "response", command: "get_model_catalog", success: true, data: catalog })
+    this.emit({ type: "response", command: "get_available_models", success: true, data: { models: catalog.models } })
+    this.emit({ type: "response", command: "get_state", success: true, data: this.state() })
+  }
+
   private handleBackendMessage(message: BackendMessage) {
     switch (message.type) {
       case "ready":
+        break
+      case "models.catalog":
+        this.applyCatalog({
+          providers: message.providers ?? [],
+          models: message.models ?? [],
+          state: message.state,
+        })
         break
       case "session.list": {
         this.sessions = (message.sessions ?? []).map(mapSession)
@@ -309,7 +364,7 @@ class EnoughClient {
 
   private state(): AgentSessionState {
     return {
-      model,
+      model: this.catalog.state.modelId ? stateToModel(this.catalog.state) : undefined,
       sessionId: this.currentSessionId ?? "",
       isStreaming: this.streaming,
       messageCount: this.currentSessionId ? this.histories.get(this.currentSessionId)?.length ?? 0 : 0,

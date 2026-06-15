@@ -3,7 +3,7 @@ import { Sparkles, ChevronRight } from "lucide-react"
 import { cn } from "../lib/utils"
 import { MarkdownContent } from "./markdown-content"
 
-export function ThinkingBlock({ text }: { text: string }) {
+export function ThinkingBlock({ id, text }: { id: string; text: string }) {
   const [open, setOpen] = useState(false)
   return (
     <div>
@@ -17,7 +17,7 @@ export function ThinkingBlock({ text }: { text: string }) {
       </button>
       {open && (
         <div className="mt-2 border-l-2 border-border pl-3">
-          <MarkdownContent text={text} className="text-[13px] italic text-muted-foreground" />
+          <MarkdownContent id={id} text={text} className="text-[13px] italic text-muted-foreground" />
         </div>
       )}
     </div>

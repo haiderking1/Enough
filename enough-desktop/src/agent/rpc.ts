@@ -20,11 +20,35 @@ export interface RawMessage {
   timestamp?: number
 }
 
+export interface AgentProvider {
+  id: string
+  name: string
+  connected: boolean
+}
+
 export interface AgentModel {
   id: string
   name: string
   provider: string
+  contextWindow?: number
+  contextLabel?: string
   reasoning?: boolean
+  thinkingLevels?: string[]
+}
+
+export interface ModelSelectionState {
+  provider: string
+  modelId: string
+  modelName: string
+  thinkingLevel: string
+  contextLabel?: string
+  reasoning?: boolean
+}
+
+export interface ModelCatalog {
+  providers: AgentProvider[]
+  models: AgentModel[]
+  state: ModelSelectionState
 }
 
 export interface AgentSessionInfo {
@@ -57,8 +81,9 @@ export type AgentEvent =
   // Command responses
   | { type: "response"; command: "get_state"; success: true; data: AgentSessionState }
   | { type: "response"; command: "get_available_models"; success: true; data: { models: AgentModel[] } }
+  | { type: "response"; command: "get_model_catalog"; success: true; data: ModelCatalog }
   | { type: "response"; command: "list_sessions"; success: true; data: { sessions: AgentSessionInfo[] } }
-  | { type: "response"; command: "set_model"; success: true; data: AgentModel }
+  | { type: "response"; command: "set_model"; success: true; data: ModelSelectionState }
   | { type: "response"; command: "get_messages"; success: true; data: { messages: RawMessage[] } }
   | { type: "response"; command: "switch_session"; success: true; data: { cancelled: boolean } }
   | { type: "response"; command: "new_session"; success: true; data: { cancelled: boolean } }

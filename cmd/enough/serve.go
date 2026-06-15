@@ -18,6 +18,7 @@ import (
 	"github.com/enough/enough/backend/agent"
 	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/core"
+	"github.com/enough/enough/backend/opencode"
 	"github.com/enough/enough/backend/session"
 	"github.com/gorilla/websocket"
 )
@@ -30,10 +31,13 @@ type WsClientAttachment struct {
 
 // WsClientMessage represents messages incoming from client
 type WsClientMessage struct {
-	Type        string               `json:"type"`
-	Text        string               `json:"text,omitempty"`
-	ID          string               `json:"id,omitempty"`
-	Attachments []WsClientAttachment `json:"attachments,omitempty"`
+	Type          string               `json:"type"`
+	Text          string               `json:"text,omitempty"`
+	ID            string               `json:"id,omitempty"`
+	Provider      string               `json:"provider,omitempty"`
+	Model         string               `json:"model,omitempty"`
+	ThinkingLevel string               `json:"thinkingLevel,omitempty"`
+	Attachments   []WsClientAttachment `json:"attachments,omitempty"`
 }
 
 // WsServerMessage represents client responses (extensible structure)
@@ -255,6 +259,13 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ag := agent.New(cfg, "", sm)
+	modelRegistry := opencode.DefaultRegistry()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		refreshDesktopModelRegistry(ctx, modelRegistry)
+		sendModelsCatalog(sendCh, modelRegistry)
+	}()
 
 	var promptingMu sync.Mutex
 	var prompting bool
@@ -379,6 +390,28 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 			if err == nil {
 				sendCh <- WsServerMessage{Type: "session.list", Sessions: list}
 			}
+
+		case "listModels":
+			handleListModels(sendCh, modelRegistry)
+
+		case "setModel":
+			if !providerConnected(msg.Provider) {
+				sendCh <- WsServerMessage{Type: "error", Message: "provider not connected"}
+				continue
+			}
+			thinking := msg.ThinkingLevel
+			if thinking == "" && opencode.SupportsThinking(msg.Model) {
+				thinking = string(opencode.ThinkingMedium)
+			}
+			if err := config.ApplyProviderModel(msg.Provider, msg.Model, thinking); err != nil {
+				sendCh <- WsServerMessage{Type: "error", Message: err.Error()}
+				continue
+			}
+			if runCfg, err := config.LoadRuntime(); err == nil {
+				cfg = runCfg
+				ag.UpdateConfig(runCfg)
+			}
+			sendModelsCatalog(sendCh, modelRegistry)
 
 		case "prompt":
 			var userAtts []agent.UserAttachment
