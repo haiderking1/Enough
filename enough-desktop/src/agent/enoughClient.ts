@@ -214,6 +214,8 @@ class EnoughClient {
     }
   }
 
+  private awaitingNewSession = false
+
   send(command: Record<string, unknown>) {
     this.connect()
 
@@ -255,6 +257,7 @@ class EnoughClient {
       }
       case "new_session": {
         const cwd = commandText(command, "cwd")
+        this.awaitingNewSession = true
         this.sendWs({ type: "newSession", ...(cwd ? { cwd } : {}) })
         this.emit({ type: "response", command: "new_session", success: true, data: { cancelled: false } })
         break
@@ -347,7 +350,7 @@ class EnoughClient {
       case "session.list": {
         this.sessions = (message.sessions ?? []).map(mapSession)
         const first = this.sessions[0]
-        if (!this.currentSessionId && first) {
+        if (!this.currentSessionId && first && !this.awaitingNewSession) {
           this.currentSessionId = first.id
           this.sendWs({ type: "openSession", id: first.id })
         }
@@ -356,6 +359,7 @@ class EnoughClient {
         break
       }
       case "session.history": {
+        this.awaitingNewSession = false
         this.currentSessionId = message.sessionId
         const history = mapHistory(message.messages)
         this.histories.set(message.sessionId, history)
@@ -408,6 +412,7 @@ class EnoughClient {
         this.sendWs({ type: "listSessions" })
         break
       case "error":
+        this.awaitingNewSession = false
         this.streaming = false
         this.toolMeta.clear()
         this.emit({ type: "bridge_error", error: message.message })

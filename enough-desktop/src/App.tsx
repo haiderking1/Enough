@@ -32,6 +32,39 @@ function loadJSON<T>(key: string, fallback: T): T {
   }
 }
 
+function upsertActiveSession(
+  prev: AgentSessionInfo[],
+  sessionId: string,
+  cwd: string,
+): AgentSessionInfo[] {
+  if (prev.some((s) => s.id === sessionId || s.path === sessionId)) return prev
+  const now = new Date().toISOString()
+  return [
+    {
+      path: "",
+      id: sessionId,
+      cwd,
+      name: "New session",
+      created: now,
+      modified: now,
+      messageCount: 0,
+      firstMessage: "",
+    },
+    ...prev,
+  ]
+}
+
+function mergeSessionList(
+  incoming: AgentSessionInfo[],
+  prev: AgentSessionInfo[],
+  activeId: string | null,
+): AgentSessionInfo[] {
+  if (!activeId) return incoming
+  if (incoming.some((s) => s.id === activeId || s.path === activeId)) return incoming
+  const optimistic = prev.find((s) => s.id === activeId || s.path === activeId)
+  return optimistic ? [optimistic, ...incoming] : incoming
+}
+
 export default function App() {
   const [collapsed, setCollapsed] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
@@ -144,6 +177,8 @@ export default function App() {
   messagesRef.current = messages
   const currentSessionIdRef = useRef<string | null>(null)
   currentSessionIdRef.current = currentSessionId
+  const projectCwdRef = useRef<string | null>(null)
+  projectCwdRef.current = projectCwd
   const messagesCacheRef = useRef(new Map<string, Message[]>())
 
   const stashMessagesInCache = useCallback((sessionId: string | null) => {
@@ -217,9 +252,15 @@ export default function App() {
           if (!event.success) break
           switch (event.command) {
             case "get_state": {
+              const sid = event.data.sessionId || null
               setModel(event.data.model ?? null)
-              setCurrentSessionId(event.data.sessionId)
+              setCurrentSessionId(sid)
               setIsStreaming(event.data.isStreaming)
+              if (sid) {
+                setSessionList((prev) =>
+                  upsertActiveSession(prev, sid, projectCwdRef.current ?? "~"),
+                )
+              }
               break
             }
             case "get_available_models":
@@ -243,8 +284,11 @@ export default function App() {
             }
             case "list_sessions": {
               const sessions = event.data.sessions
-              setSessionList(sessions)
-              localStorage.setItem("enough-session-cache", JSON.stringify(sessions))
+              setSessionList((prev) => {
+                const merged = mergeSessionList(sessions, prev, currentSessionIdRef.current)
+                localStorage.setItem("enough-session-cache", JSON.stringify(merged))
+                return merged
+              })
               break
             }
             case "get_messages": {
@@ -448,29 +492,10 @@ export default function App() {
     return Array.from(set)
   }, [projectCwd, sessionList])
 
-  // Inject the active session as a synthetic entry while it has no on-disk
-  // record yet (brand-new thread), so it shows under its project immediately.
-  const sidebarSessions = useMemo(() => {
-    const visible = sessionList.filter((s) => !hiddenThreads.includes(s.id))
-    const inList = visible.some(
-      (s) => s.id === currentSessionId || s.path === currentSessionId,
-    )
-    if (currentSessionId && projectCwd && !inList) {
-      const now = new Date().toISOString()
-      const synthetic: AgentSessionInfo = {
-        path: "",
-        id: currentSessionId,
-        cwd: projectCwd,
-        name: "New session",
-        created: now,
-        modified: now,
-        messageCount: 0,
-        firstMessage: "",
-      }
-      return [synthetic, ...visible]
-    }
-    return visible
-  }, [currentSessionId, projectCwd, sessionList, hiddenThreads])
+  const sidebarSessions = useMemo(
+    () => sessionList.filter((s) => !hiddenThreads.includes(s.id)),
+    [sessionList, hiddenThreads],
+  )
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
