@@ -11,6 +11,7 @@ import SettingsPanel from "./components/SettingsPanel"
 import { SearchModal } from "./components/SearchModal"
 import { DirectoryPicker } from "./components/DirectoryPicker"
 import type { Message, Block } from "./types"
+import { enoughAgent } from "./agent/enoughClient"
 import {
   type AgentEvent,
   type AgentModel,
@@ -22,13 +23,13 @@ import {
 
 const applyZoom = (level: number) => {
   try {
-    window.flame?.setZoom(level)
+    window.enough?.setZoom(level)
   } catch (err) {
     console.error("Failed to set zoom:", err)
   }
 }
 
-const send = (command: Record<string, unknown>) => window.flame?.agent.send(command)
+const send = (command: Record<string, unknown>) => enoughAgent.send(command)
 
 function loadJSON<T>(key: string, fallback: T): T {
   try {
@@ -56,38 +57,46 @@ export default function App() {
   const [model, setModel] = useState<AgentModel | null>(null)
   const [availableModels, setAvailableModels] = useState<AgentModel[]>([])
   const [sessionList, setSessionList] = useState<AgentSessionInfo[]>(() =>
-    loadJSON<AgentSessionInfo[]>("flame-session-cache", []),
+    loadJSON<AgentSessionInfo[]>("enough-session-cache", []),
   )
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [projectCwd, setProjectCwd] = useState<string | null>(null)
   const [addedProjects, setAddedProjects] = useState<string[]>(() =>
-    loadJSON<string[]>("flame-projects", []),
+    loadJSON<string[]>("enough-projects", []),
   )
   // App-level (never on disk): display names + hidden threads.
   const [projectAliases, setProjectAliases] = useState<Record<string, string>>(() =>
-    loadJSON("flame-project-names", {}),
+    ({
+      ...Object.fromEntries(
+        sessionList.map((session) => [
+          session.cwd,
+          session.cwd.replace(/\/+$/, "").split("/").pop() || session.cwd,
+        ]),
+      ),
+      ...loadJSON<Record<string, string>>("enough-project-names", {}),
+    }),
   )
   const [threadAliases, setThreadAliases] = useState<Record<string, string>>(() =>
-    loadJSON("flame-thread-names", {}),
+    loadJSON("enough-thread-names", {}),
   )
   const [hiddenThreads, setHiddenThreads] = useState<string[]>(() =>
-    loadJSON<string[]>("flame-hidden-threads", []),
+    loadJSON<string[]>("enough-hidden-threads-v2", []),
   )
 
   const [zoom, setZoom] = useState(() => {
-    const saved = localStorage.getItem("flame-zoom")
+    const saved = localStorage.getItem("enough-zoom")
     return saved ? parseFloat(saved) : 1.0
   })
 
   // Persist zoom changes
   useEffect(() => {
-    localStorage.setItem("flame-zoom", zoom.toString())
+    localStorage.setItem("enough-zoom", zoom.toString())
     applyZoom(zoom)
   }, [zoom])
 
   // Global Ctrl/Cmd shortcuts (search & zoom)
   useEffect(() => {
-    const canZoom = window.flame?.isElectron === true
+    const canZoom = window.enough?.isElectron === true
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey) {
@@ -129,17 +138,17 @@ export default function App() {
 
   // Persist added projects + app-level aliases / hidden threads.
   useEffect(() => {
-    localStorage.setItem("flame-projects", JSON.stringify(addedProjects))
+    localStorage.setItem("enough-projects", JSON.stringify(addedProjects))
   }, [addedProjects])
 
   useEffect(() => {
-    localStorage.setItem("flame-project-names", JSON.stringify(projectAliases))
+    localStorage.setItem("enough-project-names", JSON.stringify(projectAliases))
   }, [projectAliases])
   useEffect(() => {
-    localStorage.setItem("flame-thread-names", JSON.stringify(threadAliases))
+    localStorage.setItem("enough-thread-names", JSON.stringify(threadAliases))
   }, [threadAliases])
   useEffect(() => {
-    localStorage.setItem("flame-hidden-threads", JSON.stringify(hiddenThreads))
+    localStorage.setItem("enough-hidden-threads-v2", JSON.stringify(hiddenThreads))
   }, [hiddenThreads])
 
   // Id of the assistant message currently being streamed by the agent.
@@ -150,11 +159,6 @@ export default function App() {
   currentSessionIdRef.current = currentSessionId
   const messagesCacheRef = useRef(new Map<string, Message[]>())
 
-  const addedProjectsRef = useRef(addedProjects)
-  addedProjectsRef.current = addedProjects
-  const projectCwdRef = useRef(projectCwd)
-  projectCwdRef.current = projectCwd
-
   const stashMessagesInCache = useCallback((sessionId: string | null) => {
     if (sessionId && messagesRef.current.length > 0) {
       messagesCacheRef.current.set(sessionId, messagesRef.current)
@@ -162,15 +166,11 @@ export default function App() {
   }, [])
 
   const refreshSessionList = useCallback(() => {
-    const cwds = new Set<string>(addedProjectsRef.current)
-    if (projectCwdRef.current) cwds.add(projectCwdRef.current)
-    if (cwds.size === 0) return
-    send({ type: "list_sessions", cwds: Array.from(cwds) })
+    send({ type: "list_sessions" })
   }, [])
 
   // Refresh sidebar when projects are added/removed (not on every thread switch).
   useEffect(() => {
-    if (!window.flame?.agent) return
     refreshSessionList()
   }, [addedProjects, refreshSessionList])
 
@@ -184,8 +184,7 @@ export default function App() {
 
   // Subscribe to agent events + responses once.
   useEffect(() => {
-    if (!window.flame?.agent) return
-    const unsubscribe = window.flame.agent.onEvent((event: AgentEvent) => {
+    const unsubscribe = enoughAgent.onEvent((event: AgentEvent) => {
       switch (event.type) {
         case "bridge_ready": {
           // Pipe is open (possibly after respawning in a new cwd).
@@ -244,7 +243,7 @@ export default function App() {
             case "list_sessions": {
               const sessions = event.data.sessions
               setSessionList(sessions)
-              localStorage.setItem("flame-session-cache", JSON.stringify(sessions))
+              localStorage.setItem("enough-session-cache", JSON.stringify(sessions))
               break
             }
             case "get_messages": {
@@ -421,15 +420,14 @@ export default function App() {
   const modelLabel = model?.name ?? "…"
   const showEmpty = messages.length === 0
 
-  // Only projects the user explicitly added (plus the active one so the
-  // current thread is always visible) — NOT every directory that happens to
-  // have a past session.
+  // The sidebar is session-derived. Persisted project folders are only used
+  // for picker state, not as fake empty buckets in the thread list.
   const projects = useMemo(() => {
     const set = new Set<string>()
-    for (const p of addedProjects) set.add(p)
+    for (const session of sessionList) set.add(session.cwd)
     if (projectCwd) set.add(projectCwd)
     return Array.from(set)
-  }, [projectCwd, addedProjects])
+  }, [projectCwd, sessionList])
 
   // Inject the active session as a synthetic entry while it has no on-disk
   // record yet (brand-new thread), so it shows under its project immediately.

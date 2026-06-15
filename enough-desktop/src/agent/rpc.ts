@@ -1,16 +1,20 @@
-// Adapter between the flame agent's RPC event stream and the desktop UI's
-// data model (blocks, messages, models, sessions).
-import type { Block, Message } from "../types"
+// Adapter between Enough's WebSocket events and the desktop UI data model.
+import type { Block, Message, ToolVerb } from "../types"
 
 // ── Shapes from the agent (we only type what we read) ────────────────────────
 
-interface ContentPart {
+export interface ContentPart {
   type: string
   text?: string
   thinking?: string
+  tool?: ToolVerb
+  title?: string
+  meta?: string
+  status?: "running" | "done" | "error"
+  output?: string
 }
 
-interface RawMessage {
+export interface RawMessage {
   role: string
   content?: ContentPart[]
   timestamp?: number
@@ -76,8 +80,16 @@ export function mapAssistantContent(content: ContentPart[] | undefined): Block[]
       blocks.push({ type: "text", text: part.text })
     } else if (part.type === "thinking" && part.thinking) {
       blocks.push({ type: "thinking", text: part.thinking })
+    } else if (part.type === "tool" && part.tool) {
+      blocks.push({
+        type: "tool",
+        tool: part.tool as Extract<Block, { type: "tool" }>["tool"],
+        title: part.title ?? "",
+        meta: part.meta,
+        status: part.status ?? "done",
+        output: part.output,
+      })
     }
-    // Tool parts are handled in a later slice.
   }
   return blocks
 }

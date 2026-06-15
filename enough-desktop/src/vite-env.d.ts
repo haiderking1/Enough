@@ -8,18 +8,13 @@ interface DirListing {
   error?: string
 }
 
-interface FlameBridge {
+interface EnoughBridge {
   isElectron: true
   setZoom: (factor: number) => void
   pickDirectory: () => Promise<string | null>
   listDir: (path?: string) => Promise<DirListing>
-  agent: {
-    send: (command: Record<string, unknown>) => void
-    setCwd: (cwd: string) => void
-    onEvent: (callback: (event: any) => void) => () => void
-  }
 }
 
 interface Window {
-  flame?: FlameBridge
+  enough?: EnoughBridge
 }

@@ -9,9 +9,11 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/enough/enough/backend/agent"
 	"github.com/enough/enough/backend/config"
@@ -53,9 +55,14 @@ type WsServerMessage struct {
 
 // SessionResponse mirrors frontend Session object
 type SessionResponse struct {
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	CreatedAt string `json:"createdAt"`
+	ID           string `json:"id"`
+	Path         string `json:"path"`
+	CWD          string `json:"cwd"`
+	Title        string `json:"title"`
+	CreatedAt    string `json:"createdAt"`
+	Created      string `json:"created"`
+	Modified     string `json:"modified"`
+	MessageCount int    `json:"messageCount"`
 }
 
 // WsHistoryMessage matches chat message shape loaded in picking picker
@@ -96,10 +103,54 @@ var upgrader = websocket.Upgrader{
 
 func mapSessionInfo(info session.Info) SessionResponse {
 	return SessionResponse{
-		ID:        info.ID,
-		Title:     info.FirstMessage,
-		CreatedAt: session.FormatRelative(info.Modified),
+		ID:           info.ID,
+		Path:         info.Path,
+		CWD:          info.CWD,
+		Title:        info.FirstMessage,
+		CreatedAt:    session.FormatRelative(info.Modified),
+		Created:      info.Created.Format(time.RFC3339Nano),
+		Modified:     info.Modified.Format(time.RFC3339Nano),
+		MessageCount: info.MessageCount,
 	}
+}
+
+func shouldShowDesktopSession(info session.Info) bool {
+	cwd := filepath.Clean(info.CWD)
+	tmp := filepath.Clean(os.TempDir())
+	if cwd == "." || cwd == "" {
+		return true
+	}
+	if !strings.HasPrefix(cwd, tmp+string(os.PathSeparator)) {
+		return true
+	}
+
+	rel, err := filepath.Rel(tmp, cwd)
+	if err != nil {
+		return true
+	}
+	for _, part := range strings.Split(rel, string(os.PathSeparator)) {
+		if strings.HasPrefix(part, "Test") ||
+			strings.HasPrefix(part, "enough-test-tree-") ||
+			strings.Contains(part, "enough-test-tree") {
+			return false
+		}
+	}
+	return true
+}
+
+func listDesktopSessions() ([]SessionResponse, error) {
+	infos, err := session.ListAll()
+	if err != nil {
+		return nil, err
+	}
+
+	var list []SessionResponse
+	for _, info := range infos {
+		if shouldShowDesktopSession(info) {
+			list = append(list, mapSessionInfo(info))
+		}
+	}
+	return list, nil
 }
 
 func runServeCLI() {
@@ -236,14 +287,10 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 
 		switch msg.Type {
 		case "listSessions":
-			infos, err := session.ListAll()
+			list, err := listDesktopSessions()
 			if err != nil {
 				sendCh <- WsServerMessage{Type: "error", Message: err.Error()}
 				continue
-			}
-			var list []SessionResponse
-			for _, info := range infos {
-				list = append(list, mapSessionInfo(info))
 			}
 			sendCh <- WsServerMessage{Type: "session.list", Sessions: list}
 
@@ -313,6 +360,24 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 				Type:      "session.history",
 				SessionID: newSm.SessionID(),
 				Messages:  history,
+			}
+
+		case "newSession":
+			if err := sm.NewSession(); err != nil {
+				sendCh <- WsServerMessage{Type: "error", Message: err.Error()}
+				continue
+			}
+
+			ag.LoadSession(sm)
+			sendCh <- WsServerMessage{
+				Type:      "session.history",
+				SessionID: sm.SessionID(),
+				Messages:  []WsHistoryMessage{},
+			}
+
+			list, err := listDesktopSessions()
+			if err == nil {
+				sendCh <- WsServerMessage{Type: "session.list", Sessions: list}
 			}
 
 		case "prompt":

@@ -14,12 +14,7 @@ const bridge = {
       entries: [],
       home: '',
     }),
-  agent: {
-    send: () => {},
-    setCwd: () => {},
-    onEvent: () => () => {},
-  },
 };
 
 contextBridge.exposeInMainWorld('enoughIPC', bridge);
-contextBridge.exposeInMainWorld('flame', bridge);
+contextBridge.exposeInMainWorld('enough', bridge);

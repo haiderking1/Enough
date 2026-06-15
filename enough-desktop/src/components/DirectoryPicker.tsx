@@ -13,9 +13,9 @@ export function DirectoryPicker({ open, onClose, onSelect }: DirectoryPickerProp
   const [loading, setLoading] = useState(false)
 
   const load = useCallback(async (path?: string) => {
-    if (!window.flame?.listDir) return
+    if (!window.enough?.listDir) return
     setLoading(true)
-    const result = await window.flame.listDir(path)
+    const result = await window.enough.listDir(path)
     setListing(result)
     setLoading(false)
   }, [])

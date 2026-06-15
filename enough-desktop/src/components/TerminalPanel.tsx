@@ -19,12 +19,12 @@ export default function TerminalPanel({ open }: TerminalPanelProps) {
             <span className="font-mono text-[11px] font-medium text-foreground/80">bash</span>
           </div>
           <span className="h-3.5 w-px bg-border" />
-          <span className="font-mono text-[10px] text-muted-foreground">~/projects/flame-desktop</span>
+          <span className="font-mono text-[10px] text-muted-foreground">~/projects/enough-desktop</span>
         </div>
         <div className="flex-1 overflow-y-auto p-3.5 font-mono text-xs leading-relaxed text-foreground/80">
           <div className="flex items-center gap-1.5">
             <span className="text-success">➜</span>
-            <span className="text-accent">flame-desktop</span>
+            <span className="text-accent">enough-desktop</span>
             <span className="inline-block h-[1.05em] w-[7px] translate-y-[1px] bg-success animate-caret" />
           </div>
         </div>
