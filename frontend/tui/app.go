@@ -631,13 +631,6 @@ func (a *App) buildLines() (out []string, stablePrefix int) {
 	}
 	stablePrefix = len(out)
 
-	if menu := a.renderSlashMenu(w); menu != "" {
-		if len(out) > 0 {
-			out = append(out, "")
-		}
-		out = append(out, clampSplitLines(strings.Split(menu, "\n"), w)...)
-	}
-
 	if picker := a.renderSessionPicker(w); picker != "" {
 		if len(out) > 0 {
 			out = append(out, "")
@@ -700,6 +693,10 @@ func (a *App) buildLines() (out []string, stablePrefix int) {
 	composer := a.composerLines(w)
 	if len(composer) > 0 {
 		out = append(out, composer...)
+	}
+
+	if menu := a.renderSlashMenu(w); menu != "" {
+		out = append(out, clampSplitLines(strings.Split(menu, "\n"), w)...)
 	}
 
 	if footer := a.footerLines(w); len(footer) > 0 {

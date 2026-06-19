@@ -204,7 +204,7 @@ func (a *App) renderPluginsTabBar() string {
 	accent := lipgloss.Color("#7c8cff")
 	dark := lipgloss.Color("#0d0d0f")
 	activeTab := lipgloss.NewStyle().Background(accent).Foreground(dark).Padding(0, 1).Bold(true)
-	inactiveTab := a.styles.SlashName
+	inactiveTab := a.styles.SlashDim
 
 	title := a.styles.SlashSelected.Render("Plugins")
 	var tabParts []string
@@ -215,7 +215,7 @@ func (a *App) renderPluginsTabBar() string {
 			tabParts = append(tabParts, inactiveTab.Render(name))
 		}
 	}
-	return "  " + title + "  " + strings.Join(tabParts, "  ")
+	return "  " + title + "   " + strings.Join(tabParts, "   ")
 }
 
 func (a *App) renderPluginsSubheader(entries []mcp.CatalogEntry) string {
@@ -225,19 +225,16 @@ func (a *App) renderPluginsSubheader(entries []mcp.CatalogEntry) string {
 		a.clampPluginsPickerCursor()
 		pos = a.pluginsPickerCursor + 1
 	}
-	count := a.styles.SlashDim.Render(fmt.Sprintf("(%d/%d)", pos, total))
-	var label string
 	switch a.pluginsPickerActiveTab() {
 	case pluginsTabMCP:
-		label = a.styles.SlashName.Render("MCP servers ") + count
-	case pluginsTabSkills:
-		label = a.styles.SlashName.Render("Skills ")
+		return "  " + a.styles.SlashName.Render("Browse") +
+			a.styles.SlashDim.Render(fmt.Sprintf(" (%d/%d)", pos, total))
 	case pluginsTabInstalled:
-		label = a.styles.SlashName.Render("Installed ") + count
+		return "  " + a.styles.SlashName.Render("Installed") +
+			a.styles.SlashDim.Render(fmt.Sprintf(" (%d/%d)", pos, total))
 	default:
 		return ""
 	}
-	return "  " + label
 }
 
 func (a *App) renderPluginsSearchLines(width int) []string {
@@ -263,9 +260,9 @@ func (a *App) renderPluginsSearchLines(width int) []string {
 func (a *App) renderPluginsPickerHint() string {
 	switch a.pluginsPickerFocus {
 	case pluginsPickerFocusSearch:
-		return a.styles.SlashDim.Render("  search · ↓/enter/tab/esc → list · type to filter")
+		return a.styles.SlashDim.Render("  ↓ enter tab esc → list")
 	default:
-		return a.styles.SlashDim.Render("  ←→ tabs · ↑ search · ↓/j list · enter install · d remove · esc close")
+		return a.styles.SlashDim.Render("  ←→ tabs  ↑ search  ↓ pick  enter install  d remove  esc close")
 	}
 }
 
@@ -290,27 +287,33 @@ func (a *App) renderPluginsEntryList(cfg config.Config, entries []mcp.CatalogEnt
 	var lines []string
 	for i, entry := range entries {
 		lines = append(lines, a.renderPluginsEntryLine(cfg, entry, i))
-		lines = append(lines, a.renderPluginsEntryDesc(entry))
 	}
 	return lines
 }
 
 func (a *App) renderPluginsEntryLine(cfg config.Config, entry mcp.CatalogEntry, index int) string {
-	marker := "    "
-	style := a.styles.SlashDim
-	if a.pluginsPickerFocus == pluginsPickerFocusList && index == a.pluginsPickerCursor {
-		marker = "  › "
-		style = a.styles.SlashSelected
+	selected := a.pluginsPickerFocus == pluginsPickerFocusList && index == a.pluginsPickerCursor
+	marker := "  "
+	if selected {
+		marker = "› "
 	}
-	status := ""
-	if mcp.IsCatalogInstalled(cfg, entry) {
-		status = "  " + a.styles.SlashName.Render("installed")
-	}
-	return style.Render(fmt.Sprintf("%s%s%s", marker, entry.Name, status))
-}
 
-func (a *App) renderPluginsEntryDesc(entry mcp.CatalogEntry) string {
-	return a.styles.SlashDesc.Render("      " + entry.Description)
+	desc := truncateRunes(entry.Description, 44)
+	installed := mcp.IsCatalogInstalled(cfg, entry)
+
+	if selected {
+		line := marker + entry.Name + " · " + desc
+		if installed {
+			line += " · installed"
+		}
+		return a.styles.SlashSelected.Render(line)
+	}
+
+	line := marker + a.styles.SlashName.Render(entry.Name) + a.styles.SlashDesc.Render(" · "+desc)
+	if installed {
+		line += a.styles.LogAccent.Render(" · installed")
+	}
+	return line
 }
 
 func (a *App) renderPluginsPicker(width int) string {
@@ -324,15 +327,14 @@ func (a *App) renderPluginsPicker(width int) string {
 
 	var lines []string
 	lines = append(lines, a.renderPluginsTabBar())
-	lines = append(lines, "")
 
 	switch a.pluginsPickerActiveTab() {
 	case pluginsTabSkills:
-		lines = append(lines, a.renderPluginsSubheader(nil))
 		lines = append(lines, "")
 		lines = append(lines, a.styles.SlashDim.Render("  coming soon"))
 		lines = append(lines, a.styles.SlashDesc.Render("  agent skill packs will be installable here"))
 	default:
+		lines = append(lines, "")
 		lines = append(lines, a.renderPluginsSubheader(entries))
 		lines = append(lines, a.renderPluginsSearchLines(width)...)
 		lines = append(lines, "")
@@ -345,9 +347,8 @@ func (a *App) renderPluginsPicker(width int) string {
 
 	if a.pluginsPickerStatus != "" {
 		lines = append(lines, "", a.styles.AssistError.Render("  "+a.pluginsPickerStatus))
-	} else {
-		lines = append(lines, a.renderPluginsPickerHint())
 	}
+	lines = append(lines, "", a.renderPluginsPickerHint())
 
 	body := strings.Join(lines, "\n")
 	// Do not set Width here — lipgloss reflows/wraps inner lines and breaks hand-drawn box borders.

@@ -5,9 +5,29 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/skills"
 )
+
+const slashMenuVisible = 5
+
+func slashMenuViewport(cursor, total int) (start, end int) {
+	if total <= 0 {
+		return 0, 0
+	}
+	if total <= slashMenuVisible {
+		return 0, total
+	}
+	start = cursor - slashMenuVisible + 1
+	if start < 0 {
+		start = 0
+	}
+	if start > total-slashMenuVisible {
+		start = total - slashMenuVisible
+	}
+	return start, start + slashMenuVisible
+}
 
 func (a *App) slashActive() bool {
 	if a.mode != modeTask || a.running {
@@ -37,11 +57,17 @@ func (a *App) filteredSlashCommands() []slashCommand {
 		}
 	}
 
+	// Only autocomplete discovered skills when explicitly typing /skill:…
+	if !strings.HasPrefix(filter, "skill:") {
+		return out
+	}
+
 	cfg, workDir := a.slashSkillsContext()
 	if !cfg.Skills.Enabled || !cfg.Skills.EnableSkillCommands {
 		return out
 	}
 
+	skillFilter := strings.TrimPrefix(filter, "skill:")
 	discovered, _ := skills.DiscoverAllSkills(workDir, cfg)
 	for _, sk := range discovered {
 		if skills.IsSkillDisabled(sk.Name, cfg) {
@@ -56,36 +82,18 @@ func (a *App) filteredSlashCommands() []slashCommand {
 		}
 
 		slug := skills.SkillNameToSlashSlug(sk.Name)
+		if skillFilter != "" && !strings.HasPrefix(slug, skillFilter) {
+			continue
+		}
+
 		desc := sk.Description
 		if len(desc) > 50 {
 			desc = desc[:47] + "..."
 		}
-
-		// 1. /skill:<name> form
-		skillPrefixed := "skill:" + slug
-		if filter == "" || strings.HasPrefix(skillPrefixed, filter) {
-			out = append(out, slashCommand{
-				name: skillPrefixed,
-				desc: fmt.Sprintf("run skill: %s (%s)", sk.Name, desc),
-			})
-		}
-
-		// 2. /<hyphen-slug> form
-		if filter == "" || strings.HasPrefix(slug, filter) {
-			collides := false
-			for _, cmd := range slashCommands {
-				if cmd.name == slug {
-					collides = true
-					break
-				}
-			}
-			if !collides {
-				out = append(out, slashCommand{
-					name: slug,
-					desc: fmt.Sprintf("run skill: %s (%s)", sk.Name, desc),
-				})
-			}
-		}
+		out = append(out, slashCommand{
+			name: "skill:" + slug,
+			desc: fmt.Sprintf("run skill: %s (%s)", sk.Name, desc),
+		})
 	}
 
 	return out
@@ -133,34 +141,58 @@ func (a *App) renderSlashMenu(width int) string {
 	cmds := a.filteredSlashCommands()
 	a.clampSlashCursor()
 
-	var lines []string
+	pickStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#66D9EF")).Bold(true)
+
 	if len(cmds) == 0 {
-		lines = append(lines, a.styles.SlashDim.Render("  no matching commands"))
-	} else {
-		for i, cmd := range cmds {
-			marker := "  "
-			if i == a.slashCursor {
-				marker = "› "
-			}
-			pad := 14 - len(cmd.name)
-			if pad < 1 {
-				pad = 1
-			}
-			line := marker + "/" + cmd.name + strings.Repeat(" ", pad) + cmd.desc
-			if i == a.slashCursor {
-				lines = append(lines, a.styles.SlashSelected.Render(line))
-			} else {
-				lines = append(lines, a.styles.SlashDim.Render(line))
-			}
-		}
+		body := a.styles.SlashDim.Render("  no matching commands")
+		return lipgloss.NewStyle().Width(width).Render(body)
 	}
 
-	hint := a.styles.SlashDim.Render("  ↑↓ pick   enter run   tab fill   esc close")
-	body := strings.Join(lines, "\n") + "\n" + hint
+	leftWidth := 16
+	if width > 100 {
+		leftWidth = 22
+	} else if width > 80 {
+		leftWidth = 20
+	}
+	gap := "  "
 
-	return a.styles.SlashMenu.
-		Width(width - 2).
-		Render(body)
+	start, end := slashMenuViewport(a.slashCursor, len(cmds))
+	var rows []string
+	for i := start; i < end; i++ {
+		cmd := cmds[i]
+		selected := i == a.slashCursor
+
+		marker := "  "
+		if selected {
+			marker = "→ "
+		}
+		name := truncateRunes(cmd.name, leftWidth)
+		nameCell := marker + name
+
+		desc := cmd.desc
+		descBudget := width - 4 - leftWidth - len(gap) - 2
+		if descBudget > 8 {
+			desc = truncateRunes(desc, descBudget)
+		}
+
+		var left, right string
+		if selected {
+			left = pickStyle.Render(fmt.Sprintf("%-*s", leftWidth+2, nameCell))
+			right = pickStyle.Render(desc)
+		} else {
+			left = a.styles.SlashName.Render(fmt.Sprintf("%-*s", leftWidth+2, nameCell))
+			right = a.styles.SlashDesc.Render(desc)
+		}
+
+		leftCol := lipgloss.NewStyle().Width(leftWidth + 2).Render(left)
+		rows = append(rows, "  "+leftCol+gap+right)
+	}
+
+	pos := a.slashCursor + 1
+	counter := a.styles.SlashDim.Render(fmt.Sprintf("  (%d/%d)", pos, len(cmds)))
+	body := strings.Join(rows, "\n") + "\n" + counter
+
+	return lipgloss.NewStyle().Width(width).Render(body)
 }
 
 func (a *App) autocompleteSlash() {
