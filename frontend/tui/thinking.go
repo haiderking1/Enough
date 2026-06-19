@@ -64,7 +64,7 @@ func (a *App) toggleThinkingVisibility() {
 func (a *App) composerStyle() lipgloss.Style {
 	style := a.styles.InputBox.Copy()
 	switch a.mode {
-	case modeConnect, modeConnectPicker, modeConnectCodex:
+	case modeConnect, modeConnectPicker, modeConnectCodex, modePluginsSecret:
 		return style.BorderForeground(connectBorderColor())
 	default:
 		return style.BorderForeground(thinkingBorderColor(string(a.thinkingLevel)))

@@ -78,6 +78,13 @@ type App struct {
 	connectTargetProvider string
 	codexOAuthCancel    context.CancelFunc
 
+	pluginsPickerTab           int
+	pluginsPickerCursor        int
+	pluginsPickerFocus         pluginsPickerFocus
+	pluginsPickerFilter        string
+	pluginsPickerStatus        string
+	pluginsPendingEntryID string
+
 	running                  bool
 	compacting               bool
 	compactionLabel          string
@@ -485,6 +492,12 @@ func (a *App) handleKey(k parsedKey) bool {
 		}
 	}
 
+	if !running && mode == modePluginsPicker {
+		if a.handlePluginsPickerKey(k) {
+			return false
+		}
+	}
+
 	switch k.action {
 	case keyCtrlC:
 		return a.handleCtrlC()
@@ -538,7 +551,7 @@ func (a *App) handleKey(k parsedKey) bool {
 		}
 	}
 
-	if !running && a.mode != modeSessionPicker && a.mode != modeModelPicker && a.mode != modeConnectPicker && a.mode != modeConnectCodex && a.mode != modeWriteApproval {
+	if !running && a.mode != modeSessionPicker && a.mode != modeModelPicker && a.mode != modeConnectPicker && a.mode != modeConnectCodex && a.mode != modePluginsPicker && a.mode != modePluginsSecret && a.mode != modeWriteApproval {
 		switch k.action {
 		case keyShiftTab:
 			a.cycleThinkingLevel()
@@ -561,7 +574,7 @@ func (a *App) handleKey(k parsedKey) bool {
 		return false
 	}
 
-	if a.mode == modeSessionPicker || a.mode == modeModelPicker || a.mode == modeConnectPicker || a.mode == modeConnectCodex {
+	if a.mode == modeSessionPicker || a.mode == modeModelPicker || a.mode == modeConnectPicker || a.mode == modeConnectCodex || a.mode == modePluginsPicker {
 		return false
 	}
 
@@ -646,6 +659,14 @@ func (a *App) buildLines() (out []string, stablePrefix int) {
 		out = append(out, clampSplitLines(strings.Split(picker, "\n"), w)...)
 	}
 
+	if picker := a.renderPluginsPicker(w); picker != "" {
+		if len(out) > 0 {
+			out = append(out, "")
+		}
+		// Do not clamp — truncating picker lines breaks search box corners (╭╮╰╯).
+		out = append(out, strings.Split(picker, "\n")...)
+	}
+
 	if picker := a.renderWriteApprovalPicker(w); picker != "" {
 		if len(out) > 0 {
 			out = append(out, "")
@@ -717,6 +738,23 @@ func (a *App) renderTaskInputRaw() string {
 		prompt := a.styles.InputPrompt.Render("key ")
 		if len(runes) == 0 {
 			return prompt + a.styles.InputCaret.Render("▎") + a.styles.InputHint.Render(connectPlaceholder)
+		}
+		return a.renderTypedLine(prompt, runes, cursor)
+	}
+
+	if a.mode == modePluginsPicker {
+		prompt := a.styles.InputPrompt.Render("… ")
+		hint := "↓/enter/tab/esc → list · type to filter"
+		if a.pluginsPickerFocus == pluginsPickerFocusList {
+			hint = "↑ search · esc close"
+		}
+		return prompt + a.styles.InputCaret.Render("▎") + "  " + a.styles.InputHint.Render(hint)
+	}
+
+	if a.mode == modePluginsSecret {
+		prompt := a.styles.InputPrompt.Render("key ")
+		if len(runes) == 0 {
+			return prompt + a.styles.InputCaret.Render("▎") + a.styles.InputHint.Render("paste api key · enter to skip if optional")
 		}
 		return a.renderTypedLine(prompt, runes, cursor)
 	}
@@ -840,6 +878,11 @@ func (a *App) handleSubmit() {
 
 	if a.mode == modeConnect {
 		a.saveAPIKey(raw)
+		return
+	}
+
+	if a.mode == modePluginsSecret {
+		a.savePluginsSecret(raw)
 		return
 	}
 

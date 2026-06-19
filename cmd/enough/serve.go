@@ -498,6 +498,10 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 			sendModelsCatalog(sendCh, modelRegistry)
 
 		case "prompt":
+			if latestCfg, err := config.LoadRuntime(); err == nil {
+				cfg = latestCfg
+			}
+
 			var userAtts []agent.UserAttachment
 			for _, att := range msg.Attachments {
 				dec, err := base64.StdEncoding.DecodeString(att.Data)

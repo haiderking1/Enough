@@ -10,6 +10,8 @@ const (
 	modeSessionPicker
 	modeTreePicker
 	modeModelPicker
+	modePluginsPicker
+	modePluginsSecret
 	modeWriteApproval
 )
 
@@ -26,6 +28,7 @@ type slashCommand struct {
 var slashCommands = []slashCommand{
 	{name: "connect", desc: "link OpenCode Go/Zen API key or OpenAI Codex OAuth"},
 	{name: "model", desc: "pick provider and model"},
+	{name: "plugins", desc: "browse and install MCP servers, skills, and more"},
 	{name: "new", desc: "start a fresh session"},
 	{name: "sessions", desc: "list saved sessions for this project"},
 	{name: "resume", desc: "pick a session to resume"},

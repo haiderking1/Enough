@@ -182,6 +182,24 @@ func DefaultCurator() CuratorSettings {
 	}
 }
 
+type MCPServerToolsConfig struct {
+	Include []string `json:"include,omitempty"`
+	Exclude []string `json:"exclude,omitempty"`
+}
+
+type MCPServerConfig struct {
+	Command        string                `json:"command,omitempty"`
+	Args           []string              `json:"args,omitempty"`
+	Env            map[string]string     `json:"env,omitempty"`
+	Cwd            string                `json:"cwd,omitempty"`
+	URL            string                `json:"url,omitempty"`
+	Headers        map[string]string     `json:"headers,omitempty"`
+	Enabled        *bool                 `json:"enabled,omitempty"`
+	Timeout        int                   `json:"timeout,omitempty"`
+	ConnectTimeout int                   `json:"connect_timeout,omitempty"`
+	Tools          *MCPServerToolsConfig `json:"tools,omitempty"`
+}
+
 // Config holds non-secret settings persisted to disk.
 type Config struct {
 	Provider      string              `json:"provider,omitempty"`
@@ -196,6 +214,7 @@ type Config struct {
 	Curator       *CuratorSettings    `json:"curator,omitempty"`
 	Agent         *AgentSettings      `json:"agent,omitempty"`
 	Plugins       *PluginsSettings    `json:"plugins,omitempty"`
+	MCPServers    map[string]MCPServerConfig `json:"mcp_servers,omitempty"`
 
 	// legacy field — migrated to secrets store on load, never written back
 	apiKeyLegacy string `json:"-"`
@@ -216,6 +235,7 @@ type Runtime struct {
 	Curator       CuratorSettings
 	Agent         AgentSettings
 	Plugins       PluginsSettings
+	MCPServers    map[string]MCPServerConfig
 	PreloadedSkills       []string
 	PreloadedSkillsPrompt string
 }
@@ -256,6 +276,7 @@ func Default() Config {
 		Plugins: &PluginsSettings{
 			Disabled: []string{},
 		},
+		MCPServers: make(map[string]MCPServerConfig),
 	}
 }
 
@@ -285,6 +306,7 @@ type fileConfig struct {
 	Curator       *CuratorSettings    `json:"curator,omitempty"`
 	Agent         *AgentSettings      `json:"agent,omitempty"`
 	Plugins       *PluginsSettings    `json:"plugins,omitempty"`
+	MCPServers    map[string]MCPServerConfig `json:"mcp_servers,omitempty"`
 }
 
 func Load() (Config, error) {
@@ -403,6 +425,11 @@ func Load() (Config, error) {
 	}
 	if raw.Plugins != nil {
 		cfg.Plugins = raw.Plugins
+	}
+	if raw.MCPServers != nil {
+		cfg.MCPServers = raw.MCPServers
+	} else {
+		cfg.MCPServers = make(map[string]MCPServerConfig)
 	}
 
 	if cfg.Provider == "" {
@@ -523,6 +550,9 @@ func Save(cfg Config) error {
 			Disabled: []string{},
 		}
 	}
+	if cfg.MCPServers == nil {
+		cfg.MCPServers = make(map[string]MCPServerConfig)
+	}
 
 	dir, err := Dir()
 	if err != nil {
@@ -550,6 +580,8 @@ func Save(cfg Config) error {
 		Memory:        cfg.Memory,
 		Curator:       cfg.Curator,
 		Agent:         cfg.Agent,
+		Plugins:       cfg.Plugins,
+		MCPServers:    cfg.MCPServers,
 	}
 
 	data, err := json.MarshalIndent(raw, "", "  ")
@@ -655,6 +687,11 @@ func LoadRuntime() (Runtime, error) {
 		pl = *cfg.Plugins
 	}
 
+	mcpServers := make(map[string]MCPServerConfig)
+	if cfg.MCPServers != nil {
+		mcpServers = cfg.MCPServers
+	}
+
 	return Runtime{
 		Provider:      provider,
 		Endpoint:      cfg.Endpoint,
@@ -669,6 +706,7 @@ func LoadRuntime() (Runtime, error) {
 		Curator:       cur,
 		Agent:         ag,
 		Plugins:       pl,
+		MCPServers:    mcpServers,
 	}, nil
 }
 

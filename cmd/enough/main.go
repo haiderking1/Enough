@@ -34,6 +34,22 @@ func main() {
 		runServeCLI()
 		return
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "mcp" {
+		runMcpCLI()
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "plugins" {
+		runPluginsCLI()
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "add" {
+		runAddCLI()
+		return
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "remove" {
+		runRemoveCLI()
+		return
+	}
 
 	// 2. Parse command-line args
 	var preloads []string
@@ -210,4 +226,8 @@ func printUsage() {
 	fmt.Println("  skills <action>       Manage skills (run 'enough skills' for actions)")
 	fmt.Println("  auth add openai-codex Browser OAuth for OpenAI Codex subscription")
 	fmt.Println("  serve [--ws addr]     Expose coding-agent via WebSocket server")
+	fmt.Println("  mcp <command>         Manage MCP servers (run 'enough mcp' for actions)")
+	fmt.Println("  add mcp <name>        Interactively add an MCP server to config")
+	fmt.Println("  remove mcp <name>     Remove an MCP server from config")
+	fmt.Println("  plugins <command>     Manage plugins (run 'enough plugins' for actions)")
 }

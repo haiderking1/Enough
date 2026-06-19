@@ -77,8 +77,57 @@ Useful options:
 
 Nested swarms are available up to depth `3`. Worktree-isolated workers disable nested `agent_swarm` so nested edits cannot escape the isolated worktree. Without worktree isolation, a swarm call rejects tasks that appear to target the same path; split the work or use `isolate: "worktree"`.
 
+## MCP Support
+
+Enough has native support for Model Context Protocol (MCP) clients. Configured servers are dynamically registered as first-class agent tools.
+
+### Configuration
+
+Add `mcp_servers` to your `~/.enough/config.json`:
+
+```json
+{
+  "mcp_servers": {
+    "qmd": {
+      "command": "qmd",
+      "args": ["mcp"],
+      "env": { "API_KEY": "your-key" },
+      "cwd": "/optional/workdir",
+      "enabled": true,
+      "timeout": 30,
+      "connect_timeout": 45,
+      "tools": {
+        "include": ["search", "get"],
+        "exclude": ["dangerous_tool"]
+      }
+    },
+    "another-remote": {
+      "url": "http://localhost:8181/mcp",
+      "headers": { "Authorization": "Bearer token" },
+      "enabled": true
+    }
+  }
+}
+```
+
+### Slash Commands in TUI
+
+- `/plugins` — Browse and install integrations (Exa, Context7, more coming).
+- `/mcp list` — Lists configured MCP servers, their connection status, and tool counts.
+- `/mcp status` — Shows detailed health status and lists exposed tools for each server.
+- `/mcp reload` — Reloads the MCP configuration and reconnects to servers.
+
+### CLI Commands
+
+- `enough add mcp <name>` — Interactive wizard; writes the server to `~/.enough/config.json`.
+- `enough remove mcp <name>` — Removes a server from config (same as deleting it manually).
+- `enough mcp list` — Lists configured servers.
+- `enough mcp test <server-name>` — Connects to a server and prints its available tools.
+- `enough mcp call <server.tool> '<json-args>'` — Directly calls an MCP tool and prints its result.
+
 ## Known Limits
 
+- Swarm workers do not inherit MCP tools. MCP tools are available only to the main agent.
 - Worktree isolation requires a git repository. Outside git, `isolate: "worktree"` falls back to the shared working directory.
 - `agent_swarm` does not implement future Flame extras such as consensus, verifier, blackboard, quorum, or transcript saving.
 - Parallel editing of the same file in one non-isolated swarm call is blocked rather than merged automatically.

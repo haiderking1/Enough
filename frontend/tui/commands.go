@@ -35,6 +35,8 @@ func (a *App) handleSlash(input string) {
 		a.startNewSession()
 	case "model":
 		a.openModelPicker(arg)
+	case "plugins":
+		a.openPluginsPicker()
 	case "compact":
 		a.startCompact(arg)
 	case "auto-compact":
@@ -421,6 +423,88 @@ func (a *App) handleSlash(input string) {
 		}
 
 		a.showMemory()
+	case "mcp":
+		sub, subArg, _ := strings.Cut(arg, " ")
+		sub = strings.ToLower(strings.TrimSpace(sub))
+		_ = subArg
+
+		cfg, err := config.LoadRuntime()
+		if err != nil {
+			a.appendMessage("error", err.Error())
+			return
+		}
+		ag := a.ensureAgent(cfg)
+
+		switch sub {
+		case "list":
+			if ag.MCPManager() == nil {
+				a.appendMessage("system", "MCP manager not initialized")
+				return
+			}
+			sessions := ag.MCPManager().Sessions()
+			if len(sessions) == 0 {
+				a.appendMessage("system", "No MCP servers configured or enabled.")
+				return
+			}
+			var lines []string
+			lines = append(lines, "Configured MCP servers:")
+			for sName, s := range sessions {
+				statusStr := "connected"
+				if s.IsUnhealthy() {
+					statusStr = "unhealthy"
+				}
+				lines = append(lines, fmt.Sprintf("  - %s: %s (%d tools)", sName, statusStr, len(s.Tools())))
+			}
+			a.appendMessage("system", strings.Join(lines, "\n"))
+			a.requestRender()
+			return
+		case "status":
+			if ag.MCPManager() == nil {
+				a.appendMessage("system", "MCP manager not initialized")
+				return
+			}
+			sessions := ag.MCPManager().Sessions()
+			if len(sessions) == 0 {
+				a.appendMessage("system", "No MCP servers configured or enabled.")
+				return
+			}
+			var lines []string
+			lines = append(lines, "MCP servers status:")
+			for sName, s := range sessions {
+				statusStr := "connected"
+				if s.IsUnhealthy() {
+					statusStr = fmt.Sprintf("unhealthy (error: %v)", s.LastError())
+				}
+				lines = append(lines, fmt.Sprintf("  - %s: %s", sName, statusStr))
+				if !s.IsUnhealthy() && len(s.Tools()) > 0 {
+					lines = append(lines, "    Tools:")
+					for _, t := range s.Tools() {
+						lines = append(lines, fmt.Sprintf("      * %s", t.Function.Name))
+					}
+				}
+			}
+			a.appendMessage("system", strings.Join(lines, "\n"))
+			a.requestRender()
+			return
+		case "reload":
+			if ag.MCPManager() == nil {
+				a.appendMessage("system", "MCP manager not initialized")
+				return
+			}
+			a.appendMessage("system", "Reloading MCP servers...")
+			a.requestRender()
+			err = ag.MCPManager().Reload(context.Background(), cfg.MCPServers)
+			if err != nil {
+				a.appendMessage("error", fmt.Sprintf("Reload failed: %v", err))
+			} else {
+				a.appendMessage("system", "MCP servers reloaded successfully.")
+			}
+			a.requestRender()
+			return
+		default:
+			a.appendMessage("error", "Usage: /mcp list | status | reload")
+			return
+		}
 	case "curator-run":
 		a.runCurator(arg)
 	case "curator-status":

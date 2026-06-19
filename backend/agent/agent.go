@@ -16,6 +16,7 @@ import (
 	"github.com/enough/enough/backend/agent/obligations"
 	"github.com/enough/enough/backend/config"
 	"github.com/enough/enough/backend/core"
+	"github.com/enough/enough/backend/mcp"
 	"github.com/enough/enough/backend/memory"
 	"github.com/enough/enough/backend/opencode"
 	"github.com/enough/enough/backend/session"
@@ -116,6 +117,8 @@ type Agent struct {
 	// reviewWG tracks in-flight background review goroutines (tests and
 	// shutdown can wait on it).
 	reviewWG sync.WaitGroup
+
+	mcpManager *mcp.Manager
 }
 
 func New(cfg config.Runtime, workDir string, sm *session.Manager) *Agent {
@@ -132,8 +135,14 @@ func New(cfg config.Runtime, workDir string, sm *session.Manager) *Agent {
 		workDir:     workDir,
 		session:     sm,
 		writeOrigin: WriteOriginForeground,
+		mcpManager:  mcp.NewManager(),
 	}
 	a.initMemoryStore()
+
+	// Connect/reload MCP servers eagerly on Agent creation
+	if len(cfg.MCPServers) > 0 {
+		_ = a.mcpManager.Reload(context.Background(), cfg.MCPServers)
+	}
 
 	// Resumed sessions replay their stored system prompt verbatim so the
 	// upstream prefix cache stays warm; fresh sessions build a new one.
@@ -152,6 +161,12 @@ func New(cfg config.Runtime, workDir string, sm *session.Manager) *Agent {
 	}
 
 	return a
+}
+
+func (a *Agent) Close() {
+	if a.mcpManager != nil && a.swarmDepth == 0 {
+		a.mcpManager.Close()
+	}
 }
 
 // initMemoryStore creates and loads the memory store (frozen snapshot) when
@@ -273,6 +288,9 @@ func (a *Agent) Abort() {
 	if compactionCancel != nil {
 		compactionCancel()
 	}
+	if a.mcpManager != nil && a.swarmDepth == 0 {
+		a.mcpManager.Close()
+	}
 }
 
 func (a *Agent) AbortCompaction() {
@@ -331,11 +349,19 @@ func (a *Agent) applyConfigLocked(cfg config.Runtime) {
 	}
 	promptAffecting := !reflect.DeepEqual(a.cfg.Memory, cfg.Memory) ||
 		!reflect.DeepEqual(a.cfg.Skills, cfg.Skills)
+	mcpChanged := !reflect.DeepEqual(a.cfg.MCPServers, cfg.MCPServers)
 	a.cfg = cfg
 	a.client = opencode.NewClientForRuntime(cfg)
 	if promptAffecting {
 		a.initMemoryStore()
 		a.invalidateSystemPrompt()
+	}
+	if mcpChanged && a.mcpManager != nil && a.swarmDepth == 0 {
+		ctx := a.turnCtx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		_ = a.mcpManager.Reload(ctx, cfg.MCPServers)
 	}
 }
 
@@ -956,4 +982,8 @@ func (a *Agent) WorkDir() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.workDir
+}
+
+func (a *Agent) MCPManager() *mcp.Manager {
+	return a.mcpManager
 }

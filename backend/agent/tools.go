@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/enough/enough/backend/opencode"
 	"github.com/enough/enough/backend/skills"
@@ -48,6 +49,21 @@ func (a *Agent) executeTool(ctx context.Context, id, name, argsJSON string) tool
 }
 
 func (a *Agent) dispatchTool(ctx context.Context, id, name, argsJSON string) toolResult {
+	if strings.HasPrefix(name, "mcp_") {
+		if a.mcpManager == nil {
+			return toolResult{output: "MCP manager not initialized", isErr: true}
+		}
+		outputBlock, contentBlocks, isErr, err := a.mcpManager.CallTool(ctx, name, argsJSON)
+		if err != nil {
+			return toolResult{output: err.Error(), isErr: true}
+		}
+		return toolResult{
+			output:  outputBlock.Text,
+			content: contentBlocks,
+			isErr:   isErr,
+		}
+	}
+
 	switch name {
 	case "read_file":
 		return a.toolReadFile(argsJSON)

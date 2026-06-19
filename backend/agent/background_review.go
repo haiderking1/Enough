@@ -261,6 +261,9 @@ func (a *Agent) toolMenu() []opencode.Tool {
 	if a.cfg.Memory.Enabled || a.cfg.Memory.UserProfileEnabled {
 		tools = append(tools, memoryNativeTool())
 	}
+	if a.swarmDepth == 0 && a.mcpManager != nil {
+		tools = append(tools, a.mcpManager.Tools()...)
+	}
 	if a.allowedTools == nil {
 		return tools
 	}

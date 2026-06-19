@@ -39,6 +39,14 @@ func (a *App) handleInterrupt() {
 		a.cancelConnect()
 		return
 	}
+	if a.mode == modePluginsPicker {
+		a.dismissPluginsPicker()
+		return
+	}
+	if a.mode == modePluginsSecret {
+		a.cancelPluginsSecret()
+		return
+	}
 	if a.slashActive() {
 		a.dismissSlashMenu()
 		return
