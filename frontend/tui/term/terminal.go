@@ -126,6 +126,8 @@ func (t *Terminal) Start(onInput func([]byte), onResize func()) error {
 		}
 	}()
 
+	DrainInput(t.fd, 200*time.Millisecond)
+
 	return nil
 }
 
@@ -184,14 +186,23 @@ func (t *Terminal) Stop() {
 	t.ShowCursor()
 	_, _ = fmt.Fprint(os.Stdout, "\x1b[?2004l")
 	t.mu.Lock()
+	t.pauseRead = true
+	ack := make(chan struct{})
+	t.pauseAck = ack
 	alt := t.altScreen
 	t.started = false
+	fd := t.fd
 	t.mu.Unlock()
+	select {
+	case <-ack:
+	case <-time.After(time.Second):
+	}
+	DrainInput(fd, 300*time.Millisecond)
 	if alt {
 		_, _ = fmt.Fprint(os.Stdout, "\x1b[?1049l")
 	}
 	if t.oldState != nil {
-		_ = term.Restore(t.fd, t.oldState)
+		_ = term.Restore(fd, t.oldState)
 	}
 }
 

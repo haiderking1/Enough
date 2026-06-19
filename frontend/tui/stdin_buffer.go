@@ -52,6 +52,12 @@ func nextInputSequence(buf []byte) (seq []byte, n int, ok bool) {
 	}
 
 	switch buf[1] {
+	case '_', 'P':
+		end := bytes.Index(buf, []byte("\x1b\\"))
+		if end == -1 {
+			return nil, 0, false
+		}
+		return buf[:end+2], end + 2, true
 	case '[':
 		if len(buf) >= 3 && buf[2] == 'M' {
 			if len(buf) < 6 {

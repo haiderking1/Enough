@@ -27,6 +27,18 @@ func TestStdinBufferKittyEscapeBuffered(t *testing.T) {
 	}
 }
 
+func TestStdinBufferKittyProbeReplyConsumed(t *testing.T) {
+	var got [][]byte
+	buf := newStdinBuffer(func(seq []byte) {
+		got = append(got, append([]byte(nil), seq...))
+	})
+
+	buf.process([]byte("\x1b_Gi=31;OK\x1b\\"))
+	if len(got) != 0 {
+		t.Fatalf("expected kitty probe reply to be swallowed, got %v", got)
+	}
+}
+
 func TestStdinBufferLoneEscapeThenKeyReader(t *testing.T) {
 	var forwarded []byte
 	buf := newStdinBuffer(func(seq []byte) {

@@ -179,15 +179,12 @@ func (a *App) notifyAsync(text string) {
 }
 
 // refreshCellDimensions sets the terminal cell pixel size used for image
-// scaling. It prefers the TIOCGWINSZ ioctl (no escape, no leak, accurate per
-// font/DPI) and falls back to the CSI 16 t query when the terminal does not
-// report pixel geometry.
+// scaling via TIOCGWINSZ. When the terminal does not report pixel geometry,
+// the default in image_protocol.go is used (no CSI queries — those leak).
 func (a *App) refreshCellDimensions() {
 	if w, h := a.term.CellPixels(); w > 0 && h > 0 {
 		markdown.SetCellDimensions(markdown.CellDimensions{WidthPx: w, HeightPx: h})
-		return
 	}
-	markdown.QueryCellDimensions(a.term)
 }
 
 func (a *App) run() error {

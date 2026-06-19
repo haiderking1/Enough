@@ -2,9 +2,11 @@ package markdown
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/term"
@@ -19,16 +21,18 @@ const footTertiaryDA = "464f4f54"
 const kittyGraphicsOK = "_Gi=31;OK"
 
 // imageProbeQuery asks for Foot tertiary DA, Kitty graphics support, then DA1.
-// Terminals ignore sequences they do not implement; DA1 acts as a read sentinel.
+// Only opt-in via ENOUGH_PROBE_TERMINAL_IMAGES — replies leak on many terminals.
 const imageProbeQuery = "\033P!|?\033\\\033_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\033\\\033[c"
 
 var (
-	capsLocked      bool
-	cellSizeReportRe = regexp.MustCompile(`\x1b\[6;(\d+);(\d+)t`)
+	capsLocked         bool
+	cellSizeReportRe     = regexp.MustCompile(`\x1b\[6;(\d+);(\d+)t`)
+	deviceAttributesRe = regexp.MustCompile(`\x1b\[\?[0-9;]*c`)
 )
 
-// InitTerminalCapabilities probes the connected terminal when env-based
-// detection did not find a native image protocol. Call once before raw mode.
+// InitTerminalCapabilities locks env-based terminal feature detection. It does
+// not send interactive escape probes by default — those replies show up as
+// garbage on the shell prompt in Warp, Alacritty, and others.
 func InitTerminalCapabilities(fd int) {
 	if capsLocked || !term.IsTerminal(fd) {
 		return
@@ -36,7 +40,7 @@ func InitTerminalCapabilities(fd int) {
 	capsLocked = true
 
 	base := detectCapabilities()
-	if base.Images == ImageNone {
+	if base.Images == ImageNone && probeTerminalImagesEnabled() {
 		if proto := probeImageProtocol(fd); proto != ImageNone {
 			base.Images = proto
 			base.TrueColor = true
@@ -47,25 +51,35 @@ func InitTerminalCapabilities(fd int) {
 	lockCapabilities(base)
 }
 
+func probeTerminalImagesEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("ENOUGH_PROBE_TERMINAL_IMAGES"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
 func lockCapabilities(c Capabilities) {
 	locked := c
 	capabilitiesFn = func() Capabilities { return locked }
 }
 
 func probeImageProtocol(fd int) ImageProtocol {
+	if _, err := os.Stdout.WriteString(imageProbeQuery); err != nil {
+		return ImageNone
+	}
+
 	tty := os.NewFile(uintptr(fd), "tty")
 	if tty == nil {
 		return ImageNone
 	}
 	defer tty.Close()
 
-	if _, err := tty.WriteString(imageProbeQuery); err != nil {
-		return ImageNone
-	}
-
 	deadline := time.Now().Add(250 * time.Millisecond)
 	buf := make([]byte, 256)
 	var out []byte
+	var detected ImageProtocol
 	for time.Now().Before(deadline) {
 		_ = tty.SetReadDeadline(deadline)
 		n, err := tty.Read(buf)
@@ -73,28 +87,57 @@ func probeImageProtocol(fd int) ImageProtocol {
 			out = append(out, buf[:n]...)
 			switch {
 			case bytes.Contains(out, []byte(footTertiaryDA)):
-				return ImageSixel
+				detected = ImageSixel
 			case bytes.Contains(out, []byte("P>|foot(")):
-				return ImageSixel
+				detected = ImageSixel
 			case bytes.Contains(out, []byte(kittyGraphicsOK)):
-				return ImageKitty
+				detected = ImageKitty
 			}
 		}
 		if err != nil {
 			break
 		}
 	}
-	return ImageNone
+	drainTerminalResponses(tty, 200*time.Millisecond)
+	return detected
 }
 
-// QueryCellDimensions asks the terminal for cell pixel size (CSI 16 t).
-// The response CSI 6 ; height ; width t is swallowed by HandleTerminalResponse.
-func QueryCellDimensions(w interface{ Write(string) }) {
-	if currentCapabilities().Images == ImageNone {
+func drainTerminalResponses(tty *os.File, totalTimeout time.Duration) {
+	if tty == nil {
 		return
 	}
-	w.Write("\x1b[16t")
+	deadline := time.Now().Add(totalTimeout)
+	idleUntil := time.Now().Add(60 * time.Millisecond)
+	buf := make([]byte, 256)
+	for time.Now().Before(deadline) {
+		wait := time.Until(idleUntil)
+		if wait <= 0 {
+			return
+		}
+		if wait > 50*time.Millisecond {
+			wait = 50 * time.Millisecond
+		}
+		_ = tty.SetReadDeadline(time.Now().Add(wait))
+		n, err := tty.Read(buf)
+		if n > 0 {
+			idleUntil = time.Now().Add(60 * time.Millisecond)
+			continue
+		}
+		var netErr interface{ Timeout() bool }
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			if time.Now().After(idleUntil) {
+				return
+			}
+			continue
+		}
+		return
+	}
 }
+
+// QueryCellDimensions is intentionally a no-op. CSI 16 t replies leak to the
+// shell on exit; cell size comes from TIOCGWINSZ (see term.CellPixels) or the
+// built-in default in image_protocol.go.
+func QueryCellDimensions(w interface{ Write(string) }) {}
 
 // HandleTerminalResponse consumes terminal query replies that must not reach
 // the key handler (e.g. cell-size reports). Returns true when seq was handled.
@@ -103,7 +146,28 @@ func HandleTerminalResponse(seq []byte) bool {
 		SetCellDimensions(*dims)
 		return true
 	}
+	if deviceAttributesRe.Match(seq) {
+		return true
+	}
+	if bytes.Contains(seq, []byte(kittyGraphicsOK)) {
+		return true
+	}
+	if isTerminalControlResponse(seq) {
+		return true
+	}
 	return false
+}
+
+func isTerminalControlResponse(seq []byte) bool {
+	if len(seq) < 3 || seq[0] != 0x1b {
+		return false
+	}
+	switch seq[1] {
+	case '_', 'P':
+		return bytes.HasSuffix(seq, []byte("\x1b\\"))
+	default:
+		return false
+	}
 }
 
 func parseCellSizeReport(data []byte) *CellDimensions {

@@ -37,7 +37,7 @@ func detectCapabilities() Capabilities {
 	}
 
 	switch {
-	case os.Getenv("KITTY_WINDOW_ID") != "" || termProgram == "kitty":
+	case os.Getenv("WARP_IS_LOCAL_SHELL_SESSION") != "" || strings.Contains(termProgram, "warp"):
 		return Capabilities{Hyperlinks: true, Images: ImageKitty, TrueColor: true}
 	case termProgram == "ghostty" || strings.Contains(term, "ghostty") || os.Getenv("GHOSTTY_RESOURCES_DIR") != "":
 		return Capabilities{Hyperlinks: true, Images: ImageKitty, TrueColor: true}
@@ -54,8 +54,10 @@ func detectCapabilities() Capabilities {
 		return Capabilities{Hyperlinks: true, Images: ImageSixel, TrueColor: true}
 	case termProgram == "vscode":
 		return Capabilities{Hyperlinks: true, Images: ImageNone, TrueColor: true}
-	case termProgram == "alacritty":
+	case termProgram == "alacritty", strings.Contains(term, "alacritty"):
 		return Capabilities{Hyperlinks: true, Images: ImageNone, TrueColor: trueColor || true}
+	case os.Getenv("KITTY_WINDOW_ID") != "" || termProgram == "kitty":
+		return Capabilities{Hyperlinks: true, Images: ImageKitty, TrueColor: true}
 	case trueColor:
 		return Capabilities{Hyperlinks: true, Images: ImageNone, TrueColor: true}
 	default:
