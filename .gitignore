@@ -1,3 +1,22 @@
 bin/
 /enough
 *.test
+docs/
+
+# Local tooling / VCS
+.jj/
+.agents/
+.codex/
+
+# Enough runtime in project dirs
+.enough/
+
+# Go tooling
+coverage.out
+coverage.html
+*.prof
+
+# Secrets / OS
+.env
+.env.*
+.DS_Store

@@ -70,7 +70,7 @@ func IsKittyProtocolActive() bool {
 	return atomic.LoadInt32(&kittyProtocolActive) == 1
 }
 
-// Modifiers bitmask matching Flame's keys.ts
+// Modifiers bitmask for Kitty keyboard protocol sequences.
 const (
 	modShift = 1
 	modAlt   = 2
