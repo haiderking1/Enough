@@ -4,7 +4,7 @@ import { Sidebar } from "./components/sidebar"
 import { ChatWorkspace } from "./components/chat-workspace"
 import TaskSidebar from "./components/TaskSidebar"
 import TerminalPanel from "./components/TerminalPanel"
-import SettingsPanel from "./components/SettingsPanel"
+import SettingsPage from "./components/settings"
 import { SearchModal } from "./components/SearchModal"
 import { DirectoryPicker } from "./components/DirectoryPicker"
 import type { Message, Block } from "./types"
@@ -22,6 +22,7 @@ import {
 } from "./agent/rpc"
 
 import { bumpZoom, initZoom, resetZoom, ZOOM_STEP } from "./lib/zoom"
+import { initTheme } from "./components/settings/themes"
 
 const send = (command: Record<string, unknown>) => hollowAgent.send(command)
 
@@ -119,6 +120,7 @@ export default function App() {
   // doesn't re-render (and re-parse) the entire chat transcript.
   useEffect(() => {
     initZoom()
+    initTheme()
   }, [])
 
   // Global Ctrl/Cmd shortcuts (search & zoom)
@@ -673,7 +675,7 @@ export default function App() {
         <TaskSidebar open={taskSidebarOpen} onClose={() => setTaskSidebarOpen(false)} />
       </main>
 
-      <SettingsPanel
+      <SettingsPage
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         models={availableModels}

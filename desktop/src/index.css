@@ -57,6 +57,33 @@
   --del-bg: rgba(224, 105, 107, 0.12);
 }
 
+/* Light theme — applied via document.documentElement.dataset.theme = "light".
+   Components use semantic tokens (var(--background), etc.), so overriding the
+   variables here cascades to the whole app without per-component dark: variants. */
+:root[data-theme="light"] {
+  --background: #fbf1c7;
+  --foreground: #3c3836;
+  --sidebar: #f2e5bc;
+  --surface: #ebdbb9;
+  --surface-hover: #dace9e;
+  --elevated: #e6d7a8;
+  --border: #d5c39a;
+  --border-strong: #c2af7d;
+  --muted: #ebdbb9;
+  --muted-foreground: #7c6f64;
+  --accent: #c44a26;
+  --accent-foreground: #fbf1c7;
+  --accent-muted: #a83d1d;
+  --success: #427b58;
+  --danger: #cc241d;
+  --warning: #b57614;
+  --info: #076678;
+  --add: #427b58;
+  --add-bg: rgba(66, 123, 88, 0.12);
+  --del: #cc241d;
+  --del-bg: rgba(204, 36, 29, 0.12);
+}
+
 * {
   border-color: var(--border);
 }
