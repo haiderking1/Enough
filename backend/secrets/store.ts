@@ -7,7 +7,9 @@ import { Effect } from "effect";
 import { verify_owner } from "./owner_unix";
 import { keyring_get, keyring_set, keyring_delete } from "./keyring";
 
-export const keyring_service = "enough";
+// Hollow keeps its own OS keyring entries (service "hollow"), separate from
+// Enough's "enough" service — so the two apps don't share API keys.
+export const keyring_service = "hollow";
 export const keyring_account = "opencode-api-key";
 
 const default_provider = "opencode-go";
@@ -72,7 +74,7 @@ export const config_dir = (): Effect.Effect<string, secrets_error> =>
     if (home === "") {
       return yield* Effect.fail(secrets_error("unable to determine user home dir", null));
     }
-    return path.join(home, ".config", "enough");
+    return path.join(home, ".config", "hollow");
   });
 
 export const credentials_path = (provider?: string): Effect.Effect<string, secrets_error> =>

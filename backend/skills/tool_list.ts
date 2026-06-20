@@ -75,7 +75,7 @@ export function ExecuteSkillsList(
         };
 
         if (list.length === 0) {
-          res.message = "No skills found. Skills live in ~/.enough/skills/<category>/<name>/SKILL.md";
+          res.message = "No skills found. Skills live in ~/.hollow/skills/<category>/<name>/SKILL.md";
         }
 
         try {

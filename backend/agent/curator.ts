@@ -40,7 +40,7 @@ export const curatorDryRunBanner =
   "write_file, or remove_file.\n" +
   "  • DO NOT call bash to mv skill directories into .archive/.\n" +
   "  • DO NOT call bash to mv, cp, rm, or rewrite any file under " +
-  "~/.enough/skills/.\n" +
+  "~/.hollow/skills/.\n" +
   "  • skills_list and skill_view are FINE — read as much as you need.\n" +
   "\n" +
   "Your output IS the deliverable. Produce the exact same " +
@@ -71,7 +71,7 @@ export const curatorReviewPrompt =
   "1. DO NOT touch bundled or externally-installed skills. The candidate " +
   "list below is already filtered to agent-created skills only.\n" +
   "2. DO NOT delete any skill. Archiving (moving the skill's directory " +
-  "into ~/.enough/skills/.archive/) is the maximum destructive action. " +
+  "into ~/.hollow/skills/.archive/) is the maximum destructive action. " +
   "Archives are recoverable; deletion is not.\n" +
   "3. DO NOT touch skills shown as pinned=yes. Skip them entirely.\n" +
   "3b. DO NOT archive, delete, consolidate, move, or otherwise modify any " +
@@ -115,7 +115,7 @@ export const curatorReviewPrompt =
   "      • `scripts/<name>.<ext>` for statically re-runnable actions " +
   "(verification scripts, fixture generators, probes)\n" +
   "      Then archive the old sibling. Use `bash` with `mkdir -p " +
-  "~/.enough/skills/<umbrella>/references/ && mv ... <umbrella>/" +
+  "~/.hollow/skills/<umbrella>/references/ && mv ... <umbrella>/" +
   "references/<topic>.md` (or templates/ / scripts/).\n\n" +
   "Package integrity — not optional:\n" +
   "Before demoting or archiving a skill, inspect it as a COMPLETE " +
@@ -316,7 +316,7 @@ export async function runCuratorLLMPass(
   curator.executeTool = curator.executeTool || Agent.prototype.executeTool;
 
   const cachedPrompt = "You are Enough's background skill curator. You maintain the " +
-    "skill library at ~/.enough/skills/. Follow the task instructions exactly.";
+    "skill library at ~/.hollow/skills/. Follow the task instructions exactly.";
   curator.cachedSystemPrompt = cachedPrompt;
   curator.messages = [
     { role: "system", content: string_content(cachedPrompt) },
@@ -349,7 +349,7 @@ export async function runCuratorLLMPass(
   return prefix + autoSummary + "; llm: " + llmSummary;
 }
 
-// writeCuratorReport writes a per-run report under ~/.enough/logs/curator/.
+// writeCuratorReport writes a per-run report under ~/.hollow/logs/curator/.
 export function writeCuratorReport(start: Date, summary: string): string {
   const root = path.join(HomeDir(), "logs", "curator");
   try {
@@ -361,7 +361,7 @@ export function writeCuratorReport(start: Date, summary: string): string {
   const filePath = path.join(root, `${timestamp}-REPORT.md`);
   const content = `# Curator run — ${start.toISOString()}\n\n${summary}\n\n## Recovery\n\n` +
     "- Restore an archived skill: /skill-restore <name>\n" +
-    "- All archives live under ~/.enough/skills/.archive/ and are recoverable by mv\n";
+    "- All archives live under ~/.hollow/skills/.archive/ and are recoverable by mv\n";
   try {
     fs.writeFileSync(filePath, content, { mode: 0o600 });
     return filePath;

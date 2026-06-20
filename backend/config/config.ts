@@ -295,21 +295,8 @@ export const load = (): Effect.Effect<config, config_error_type> =>
       if (!is_enoent(read_result.left.cause)) {
         return yield* Effect.fail(read_result.left);
       }
-      // Migration: check old ~/.config/enough/config.json
-      const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
-      if (home !== "") {
-        const old_path = path.join(home, ".config", "enough", "config.json");
-        try {
-          const old_data = fs.readFileSync(old_path);
-          raw = JSON.parse(old_data.toString("utf8")) as file_config;
-          cfg = apply_file_config(cfg, raw);
-          cfg.api_key_legacy = raw.api_key ?? "";
-          yield* save(cfg);
-          return cfg;
-        } catch {
-          // ignore failed migration
-        }
-      }
+      // No config yet — start fresh with defaults. Hollow is independent from
+      // Enough, so we deliberately do not import ~/.config/enough/config.json.
       return cfg;
     }
 

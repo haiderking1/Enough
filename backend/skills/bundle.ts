@@ -32,7 +32,7 @@ export function getAgentReferenceSkillBytes(): Buffer {
 }
 
 // ExtractEnoughSkillIfMissing ensures the canonical enough-agent reference skill
-// exists under ~/.enough/skills/ (SyncSkills is the primary path; this is a
+// exists under ~/.hollow/skills/ (SyncSkills is the primary path; this is a
 // lightweight fallback for first-run before sync completes).
 export function ExtractEnoughSkillIfMissing(): Effect.Effect<void, Error> {
   const dir = path.join(SkillsDir(), "autonomous-ai-agents", "enough-agent");

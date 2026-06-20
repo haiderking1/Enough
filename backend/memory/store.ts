@@ -16,7 +16,7 @@ export const EntryDelimiter = "\n§\n";
 export const TargetMemory = "memory";
 export const TargetUser = "user";
 
-// Dir returns the memories directory (resolved dynamically so ENOUGH_HOME
+// Dir returns the memories directory (resolved dynamically so HOLLOW_HOME
 // overrides are always respected).
 export function Dir(): string {
   return path.join(home_dir(), "memories");

@@ -175,13 +175,13 @@ export class AgentRuntimeImpl {
     });
   }
 
-  newSession(cwd?: string): Effect.Effect<string, Error> {
+  newSession(cwd?: string): Effect.Effect<manager, Error> {
     const self = this;
     return Effect.gen(function* () {
       const targetCwd = cwd || self.workDir;
       const sm = yield* start_new(targetCwd);
-      self.agent.LoadSession(sm);
-      return sm.session_id();
+      if (self.available) self.agent.LoadSession(sm);
+      return sm;
     });
   }
 

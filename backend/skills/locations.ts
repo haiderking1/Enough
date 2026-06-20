@@ -91,7 +91,7 @@ export function SearchLocations(workDir: string, cfg: runtime, agentDirOverride:
   // cwd .cursor/skills
   addDir(path.join(workDir, ".cursor", "skills"), "project", true);
 
-  // 3. Global user: ~/.enough/skills, ~/.enough/agent/skills, ~/.agents/skills, ~/.cursor/skills
+  // 3. Global user: ~/.hollow/skills, ~/.hollow/agent/skills, ~/.agents/skills, ~/.cursor/skills
   const home = HomeDir();
   addDir(path.join(home, "skills"), "user", true);
   if (agentDirOverride !== "") {
@@ -170,7 +170,7 @@ function getExternalSkillsDirs(cfg: runtime): string[] {
       expanded = path.join(userHome, expanded.substring(1));
     }
 
-    // Resolve relative paths against ENOUGH_HOME (home)
+    // Resolve relative paths against HOLLOW_HOME (home)
     let abs = expanded;
     if (!path.isAbsolute(abs)) {
       abs = path.join(home, abs);

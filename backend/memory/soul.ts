@@ -12,7 +12,7 @@ import { threatPatternIDs, ScanScope } from "./scan";
 
 export const soulMaxChars = 24000;
 
-// DefaultSoul is seeded on first run when ~/.enough/SOUL.md is missing. It is
+// DefaultSoul is seeded on first run when ~/.hollow/SOUL.md is missing. It is
 // user-editable; edits take effect on the next session.
 export const DefaultSoul = `# SOUL.md — agent identity
 
@@ -81,7 +81,7 @@ export function LoadSoul(): string {
 
   const ids = threatPatternIDs(content, ScanScope.ScopeContext);
   if (ids.length > 0) {
-    return `[BLOCKED: SOUL.md contained threat pattern(s): ${ids.join(", ")}. Its content was removed from the system prompt. Inspect and fix ~/.enough/SOUL.md, then start a new session.]`;
+    return `[BLOCKED: SOUL.md contained threat pattern(s): ${ids.join(", ")}. Its content was removed from the system prompt. Inspect and fix ~/.hollow/SOUL.md, then start a new session.]`;
   }
 
   return truncateMiddle(content, "SOUL.md", soulMaxChars);

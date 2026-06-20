@@ -420,7 +420,6 @@ export class DesktopBridge {
       // deleteSession work without one (disk reads only), so the UI can render
       // history and the "connect a provider" state instead of erroring on every call.
       const requiresAgent =
-        command.type === "newSession" ||
         command.type === "prompt" ||
         command.type === "interrupt" ||
         command.type === "setModel";
@@ -446,11 +445,7 @@ export class DesktopBridge {
           };
         }
         case "newSession": {
-          yield* runtime.newSession(command.cwd || undefined);
-          const sm = runtime.agent.session;
-          if (!sm) {
-            return yield* Effect.fail(new Error("No active session loaded"));
-          }
+          const sm = yield* runtime.newSession(command.cwd || undefined);
           return {
             type: "session.history" as const,
             sessionId: sm.session_id(),

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Search, Star } from "lucide-react"
+import { Lock, Search, Star } from "lucide-react"
 import type { AgentModel, ModelCatalog } from "../agent/rpc"
 import {
   isOpenCodeProvider,
   ProviderBrandIcon,
   providerToSidebarTab,
+  type SidebarTab,
 } from "./provider-icons"
 import { PickerButton } from "./picker-button"
 import { ThinkingPicker } from "./thinking-picker"
@@ -15,13 +16,15 @@ import { cn } from "../lib/utils"
 
 const FAVORITES_KEY = "enough-favorite-models"
 
-type SidebarTab = "favorites" | "opencode" | "openai-codex"
-
 interface ModelPickerProps {
   catalog: ModelCatalog | null
   disabled?: boolean
   isStreaming?: boolean
   onSelect: (provider: string, modelId: string, thinkingLevel: string) => void
+  // Re-fetch the catalog when the dropdown opens so a provider key added/removed
+  // since launch (e.g. via the Enough CLI) is reflected without a Settings trip.
+  // Uses get_model_catalog (local: re-reads the keyring, no provider network call).
+  onRefreshCatalog?: () => void
 }
 
 function loadFavorites(): Set<string> {
@@ -74,7 +77,7 @@ function modelMatchesTab(model: AgentModel, tab: SidebarTab) {
   return model.provider === tab
 }
 
-export function ModelPicker({ catalog, disabled, isStreaming, onSelect }: ModelPickerProps) {
+export function ModelPicker({ catalog, disabled, isStreaming, onSelect, onRefreshCatalog }: ModelPickerProps) {
   const state = catalog?.state
   const [open, setOpen] = useState(false)
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>(
@@ -102,6 +105,10 @@ export function ModelPicker({ catalog, disabled, isStreaming, onSelect }: ModelP
   )
   const codexConnected = useMemo(
     () => providers.some((p) => p.id === "openai-codex" && p.connected),
+    [providers],
+  )
+  const neuralwattConnected = useMemo(
+    () => providers.some((p) => p.id === "neuralwatt" && p.connected),
     [providers],
   )
 
@@ -161,9 +168,12 @@ export function ModelPicker({ catalog, disabled, isStreaming, onSelect }: ModelP
 
   useEffect(() => {
     if (!open) return
+    // Refresh connectivity flags the moment the picker opens — cheap, local
+    // (get_model_catalog re-reads the keyring; no provider network round-trip).
+    onRefreshCatalog?.()
     const t = window.setTimeout(() => searchRef.current?.focus(), 30)
     return () => window.clearTimeout(t)
-  }, [open])
+  }, [open, onRefreshCatalog])
 
   useEffect(() => {
     if (!open) return
@@ -242,17 +252,25 @@ export function ModelPicker({ catalog, disabled, isStreaming, onSelect }: ModelP
                   active={sidebarTab === "opencode"}
                   onClick={() => setSidebarTab("opencode")}
                   title="OpenCode"
-                  dimmed={!opencodeConnected}
+                  locked={!opencodeConnected}
                 >
-                  <ProviderBrandIcon id="opencode" className={!opencodeConnected ? "opacity-40" : undefined} />
+                  <ProviderBrandIcon id="opencode" />
+                </SidebarBtn>
+                <SidebarBtn
+                  active={sidebarTab === "neuralwatt"}
+                  onClick={() => setSidebarTab("neuralwatt")}
+                  title="NeuralWatt"
+                  locked={!neuralwattConnected}
+                >
+                  <ProviderBrandIcon id="neuralwatt" />
                 </SidebarBtn>
                 <SidebarBtn
                   active={sidebarTab === "openai-codex"}
                   onClick={() => setSidebarTab("openai-codex")}
                   title="OpenAI Codex"
-                  dimmed={!codexConnected}
+                  locked={!codexConnected}
                 >
-                  <ProviderBrandIcon id="openai-codex" className={!codexConnected ? "opacity-40" : undefined} />
+                  <ProviderBrandIcon id="openai-codex" />
                 </SidebarBtn>
               </aside>
 
@@ -275,9 +293,11 @@ export function ModelPicker({ catalog, disabled, isStreaming, onSelect }: ModelP
                         ? "No favorites yet"
                         : sidebarTab === "opencode" && !opencodeConnected
                           ? "Connect OpenCode first"
-                          : sidebarTab === "openai-codex" && !codexConnected
-                            ? "Connect Codex first"
-                            : "No models found"}
+                          : sidebarTab === "neuralwatt" && !neuralwattConnected
+                            ? "Connect NeuralWatt first"
+                            : sidebarTab === "openai-codex" && !codexConnected
+                              ? "Connect Codex first"
+                              : "No models found"}
                     </div>
                   ) : (
                     listModels.map((model, index) => {
@@ -391,13 +411,13 @@ function SidebarBtn({
   active,
   onClick,
   title,
-  dimmed,
+  locked,
   children,
 }: {
   active: boolean
   onClick: () => void
   title: string
-  dimmed?: boolean
+  locked?: boolean
   children: React.ReactNode
 }) {
   return (
@@ -408,13 +428,17 @@ function SidebarBtn({
       className={cn(
         "relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
         active ? "bg-surface text-foreground" : "text-muted-foreground hover:bg-surface/60 hover:text-foreground",
-        dimmed && "opacity-50",
       )}
     >
       {active && (
         <span className="absolute right-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full bg-info" />
       )}
-      {children}
+      <span className={cn(locked && "opacity-50")}>{children}</span>
+      {locked && (
+        <span className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-background ring-1 ring-border-strong">
+          <Lock className="h-2 w-2 text-muted-foreground" strokeWidth={2.5} />
+        </span>
+      )}
     </button>
   )
 }

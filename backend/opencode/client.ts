@@ -18,6 +18,14 @@ export class stream_status_error extends Error {
     this.status = status;
     this.name = "StreamStatusError";
   }
+  toJSON() {
+    return {
+      name: this.name,
+      status: this.status,
+      message: this.message,
+      stack: this.stack,
+    };
+  }
 }
 
 export class client {

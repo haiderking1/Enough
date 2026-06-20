@@ -148,12 +148,12 @@ export const apply_thinking_to_request = (req: chat_request, level: thinking_lev
     } else {
       req.thinking = { type: "adaptive" };
     }
-    req.reasoning_effort = "";
+    delete req.reasoning_effort;
     return;
   }
 
   if (level === "off" || level === "") {
-    req.reasoning_effort = "";
+    delete req.reasoning_effort;
     delete req.thinking;
     return;
   }

@@ -20,7 +20,7 @@ export const enoughHelpGuidance = `Enough self-configuration:
 - When the user asks to configure Enough itself — SOUL.md identity, memory, skills, CLI, curator, models, or troubleshooting — load skill_view(name="enough-agent") first and follow its instructions. Do not guess paths or invent CLI flags.`;
 
 export const soulCustomization = `SOUL.md customization:
-- ~/.enough/SOUL.md (or $ENOUGH_HOME/SOUL.md) is user-editable identity. When the user asks to rename you or change persona/voice, load skill_view(name="enough-agent") first, read its SOUL.md section, then edit — do not refuse.
+- ~/.hollow/SOUL.md (or $HOLLOW_HOME/SOUL.md) is user-editable identity. When the user asks to rename you or change persona/voice, load skill_view(name="enough-agent") first, read its SOUL.md section, then edit — do not refuse.
 - Read the full SOUL.md before editing. Resolve the absolute path (e.g. $HOME/.enough/SOUL.md); never pass a literal "~" to read_file or write_file.
 - Change only the identity lines ("You are …" and the title); preserve the rest of the file unless the user asks for more.
 - After editing SOUL.md, tell the user to start a new session (/new) for the system prompt to pick up the change.`;

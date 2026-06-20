@@ -17,6 +17,7 @@ interface ChatWorkspaceProps {
   onSend: (text: string) => void
   onAbort: () => void
   onSelectModel: (provider: string, modelId: string, thinkingLevel: string) => void
+  onRefreshCatalog?: () => void
 }
 
 export const ChatWorkspace = memo(function ChatWorkspace({
@@ -30,6 +31,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   onSend,
   onAbort,
   onSelectModel,
+  onRefreshCatalog,
 }: ChatWorkspaceProps) {
   const showEmpty = messages.length === 0
   const streaming = isStreaming || syncingThread
@@ -42,6 +44,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
         disabled={isStreaming}
         isStreaming={streaming}
         onSelect={onSelectModel}
+        onRefreshCatalog={onRefreshCatalog}
       />
     </div>
   )

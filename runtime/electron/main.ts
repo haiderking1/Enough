@@ -1,9 +1,7 @@
-// PORT STATUS: active
-// Bun + Electron unified entry. Agent runs in main; renderer talks IPC only.
-// NO WebSocket, NO Go binary spawn (no serve.go port).
-
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import path from "node:path";
+import os from "node:os";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { bootHollowRuntime, degradedRuntime, attachElectronIpc, type BootedRuntime } from "./bootstrap";
@@ -75,6 +73,31 @@ function createWindow(): void {
   }
 }
 
+function listDirectory(targetPath?: string) {
+  const home = os.homedir();
+  const resolved = targetPath ? path.resolve(targetPath) : home;
+  let parent: string | null = path.dirname(resolved);
+  if (parent === resolved) parent = null;
+
+  try {
+    const entries = fs.readdirSync(resolved, { withFileTypes: true });
+    const dirs = entries
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) => ({ name: e.name, path: path.join(resolved, e.name) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return { path: resolved, parent, entries: dirs, home };
+  } catch (err) {
+    return {
+      path: resolved,
+      parent,
+      entries: [],
+      home,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 // Custom frameless title-bar window controls.
 ipcMain.on("window-minimize", (event) => {
   const w = BrowserWindow.fromWebContents(event.sender);
@@ -90,6 +113,19 @@ ipcMain.on("window-maximize", (event) => {
 ipcMain.on("window-close", (event) => {
   const w = BrowserWindow.fromWebContents(event.sender);
   if (w) w.close();
+});
+
+ipcMain.handle("fs-list-dir", (_event, targetPath: any) => {
+  return listDirectory(typeof targetPath === "string" ? targetPath : undefined);
+});
+
+ipcMain.handle("fs-pick-directory", async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = win
+    ? await dialog.showOpenDialog(win, { properties: ["openDirectory"] })
+    : await dialog.showOpenDialog({ properties: ["openDirectory"] });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
 });
 
 app.whenReady().then(async () => {

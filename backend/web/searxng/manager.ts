@@ -258,7 +258,7 @@ const compute_data_dir = (): string => {
   if (home === "") {
     return "";
   }
-  return path.join(home, ".local", "share", "enough", "searxng");
+  return path.join(home, ".local", "share", "hollow", "searxng");
 };
 
 // Default returns the shared bundled SearXNG manager.

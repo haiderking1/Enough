@@ -3,20 +3,22 @@
 
 import path from "node:path";
 
-// HomeDir returns the path to the Enough home directory (default: ~/.enough).
-// If the ENOUGH_HOME environment variable is set, it uses that instead.
+// HomeDir returns the path to the Hollow home directory (default: ~/.hollow).
+// Hollow is independent from Enough: it keeps its own config, credentials,
+// sessions, skills, and SOUL.md here — separate from ~/.enough.
+// If the HOLLOW_HOME environment variable is set, it uses that instead.
 export const home_dir = (): string => {
-  const eh = process.env.ENOUGH_HOME;
+  const eh = process.env.HOLLOW_HOME;
   if (eh !== undefined && eh !== "") {
     return eh;
   }
 
   const home = process.env.HOME ?? process.env.USERPROFILE;
   if (home === undefined || home === "") {
-    return ".enough";
+    return ".hollow";
   }
 
-  return path.join(home, ".enough");
+  return path.join(home, ".hollow");
 };
 
 /*

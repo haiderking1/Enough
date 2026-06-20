@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { home_dir } from "../enoughhome/home";
 
-export const agent_dir_name = ".enough";
+export const agent_dir_name = ".hollow";
 export const agent_subdir = "agent";
 export const sessions_subdir = "sessions";
 export const current_version = 1;

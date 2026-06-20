@@ -44,8 +44,15 @@ declare module "electron" {
     on(channel: string, listener: (event: IpcMainEvent, ...args: unknown[]) => void): void;
     handle(
       channel: string,
-      handler: (event: IpcMainEvent, payload: unknown) => Promise<unknown> | unknown,
+      handler: (event: IpcMainEvent, payload: any) => Promise<any> | any,
     ): void;
+  };
+
+  export const dialog: {
+    showOpenDialog(
+      browserWindow?: BrowserWindow,
+      options?: { properties: string[] },
+    ): Promise<{ canceled: boolean; filePaths: string[] }>;
   };
 
   export const contextBridge: {

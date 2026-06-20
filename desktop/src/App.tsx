@@ -355,6 +355,10 @@ export default function App() {
             }
             case "list_connections": {
               setConnections(event.data.connections)
+              // The response carries a freshly-built catalog (with up-to-date
+              // per-provider `connected` flags) — keep the model picker in sync
+              // so a key added/removed since launch is reflected there too.
+              setModelCatalog(event.data.catalog)
               setSettingsError(null)
               break
             }
@@ -372,6 +376,9 @@ export default function App() {
         }
         case "connection_changed": {
           setConnections(event.connections)
+          // Reconnects re-build the catalog (new `connected` flags + freshly
+          // loaded models); adopt it so the picker unlocks immediately.
+          setModelCatalog(event.catalog)
           // Codex login resolved (success or failure) — stop showing the code.
           setCodexLogin(null)
           if (event.error) setSettingsError(event.error)
@@ -400,6 +407,7 @@ export default function App() {
           )
           streamingIdRef.current = null
           setIsStreaming(false)
+          setLoadingThread(false)
           break
         }
       }
@@ -572,6 +580,13 @@ export default function App() {
     send({ type: "set_model", provider, modelId, thinkingLevel })
   }, [])
 
+  // Local-only catalog refresh (re-reads keyring via get_model_catalog; no
+  // provider network call) — used by the model picker when it opens so a key
+  // added/removed since launch is reflected without opening Settings.
+  const handleRefreshCatalog = useCallback(() => {
+    send({ type: "get_model_catalog" })
+  }, [])
+
   // Refresh connection state whenever the Settings panel opens; clear any stale error.
   useEffect(() => {
     if (settingsOpen) {
@@ -686,6 +701,7 @@ export default function App() {
             onSend={handleSend}
             onAbort={handleAbort}
             onSelectModel={handleSelectModel}
+            onRefreshCatalog={handleRefreshCatalog}
           />
           <TerminalPanel open={terminalOpen} />
         </div>

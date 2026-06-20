@@ -21,7 +21,7 @@ export const CuratorProtectedBuiltins: Record<string, boolean> = {
 };
 
 // CuratorState is the persistent scheduler + status record
-// (~/.enough/skills/.curator_state).
+// (~/.hollow/skills/.curator_state).
 export interface CuratorState {
   last_run_at?: string;
   last_run_duration_seconds?: number;
