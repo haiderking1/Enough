@@ -139,7 +139,7 @@ export function Sidebar({
   )
 
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col bg-sidebar px-2.5 pt-4">
+    <aside className="flex min-h-0 w-[280px] shrink-0 flex-1 flex-col bg-sidebar px-2.5 pt-4">
       {/* Search */}
       <div className="pb-4">
         <button
