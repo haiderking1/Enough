@@ -1,0 +1,50 @@
+{
+  "name": "@hollow/hollow",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "runtime/electron/entry.cjs",
+  "description": "Hollow — TypeScript runtime + Electron desktop for the Enough agent (Go→TS port experiment).",
+  "scripts": {
+    "port:next": "./scripts/port-next.sh",
+    "typecheck": "tsc --noEmit",
+    "start": "bun runtime/main.ts",
+    "start:prompt": "bun runtime/main.ts --prompt",
+    "electron": "electron .",
+    "electron:dev": "concurrently -k -s first \"bun run dev\" \"VITE_DEV_SERVER_URL=http://localhost:1420 electron .\"",
+    "dev": "vite --config desktop/vite.config.ts",
+    "build:desktop": "vite build --config desktop/vite.config.ts"
+  },
+  "dependencies": {
+    "@effect/schema": "^0.73.0",
+    "ajv": "^8.20.0",
+    "effect": "^3.14.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.400.0",
+    "marked": "^18.0.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "electron": "^42.4.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "concurrently": "^8.2.2",
+    "tailwindcss": "^4.0.0",
+    "vite": "^6.0.0",
+    "tsx": "^4.19.0"
+  },
+  "trustedDependencies": [
+    "electron",
+    "electron-builder",
+    "esbuild"
+  ]
+}

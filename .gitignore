@@ -3,6 +3,12 @@ bin/
 *.test
 docs/
 
+# Node / desktop build artifacts
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
 # Local tooling / VCS
 .jj/
 .agents/
@@ -11,7 +17,7 @@ docs/
 # Enough runtime in project dirs
 .enough/
 
-# Go tooling
+# Go tooling (legacy from the Go codebase)
 coverage.out
 coverage.html
 *.prof

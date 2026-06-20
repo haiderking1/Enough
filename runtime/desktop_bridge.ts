@@ -1,0 +1,394 @@
+// PORT STATUS: active
+// source path: runtime/desktop_bridge.ts
+// confidence: high
+// status: phase_b_compile
+
+/**
+ * Renderer IPC Layer wraps this; agent never leaves main process.
+ */
+
+import { Effect, Stream } from "effect";
+import os from "node:os";
+import path from "node:path";
+import { AgentRuntimeImpl } from "./agent_runtime";
+import {
+  DesktopCommand,
+  DesktopEvent
+} from "./schemas";
+import { manager } from "../backend/session/manager";
+import { info } from "../backend/session/types";
+import { format_relative } from "../backend/session/list";
+import {
+  model_providers,
+  models_for_provider,
+  provider_codex,
+  provider_opencode,
+  provider_opencode_zen,
+  provider_neuralwatt,
+  lookup_catalog_model
+} from "../backend/opencode/providers";
+import {
+  default_registry,
+  format_context_window
+} from "../backend/opencode/models";
+import {
+  supported_thinking_levels,
+  format_thinking_level_for_model,
+  supports_thinking
+} from "../backend/opencode/thinking";
+import { connection_settings } from "../backend/config/provider";
+import { has_api_key, get_api_key } from "../backend/secrets/store";
+import { has_codex_auth, resolve_codex_credentials } from "../backend/auth/codex_oauth";
+import { default_endpoint, default_zen_endpoint, default_neuralwatt_endpoint } from "../backend/config/config";
+
+export type SessionResponse = {
+  id: string;
+  path: string;
+  cwd: string;
+  title: string;
+  createdAt: string; // relative formatted time
+  created: string; // ISO string
+  modified: string; // ISO string
+  messageCount: number;
+};
+
+export type WsHistoryTool = {
+  id: string;
+  name: string;
+  arguments: string;
+  status: "completed" | "failed";
+  result?: string;
+};
+
+export type WsHistoryMessage = {
+  id: string;
+  role: string;
+  content: string;
+  thinking?: string;
+  timestamp: string;
+  tools?: WsHistoryTool[];
+};
+
+export interface WsProviderDTO {
+  id: string;
+  name: string;
+  connected: boolean;
+}
+
+export interface WsModelDTO {
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow: number;
+  contextLabel: string;
+  reasoning: boolean;
+  thinkingLevels: string[];
+  thinkingLevelLabels: string[];
+}
+
+export interface WsModelStateDTO {
+  provider: string;
+  modelId: string;
+  modelName: string;
+  thinkingLevel: string;
+  contextLabel: string;
+  reasoning: boolean;
+}
+
+export interface WsModelsCatalog {
+  type: "models.catalog";
+  providers: WsProviderDTO[];
+  models: WsModelDTO[];
+  state: WsModelStateDTO;
+}
+
+export type DesktopResponse =
+  | { type: "session.list"; sessions: SessionResponse[] }
+  | { type: "session.history"; sessionId: string; cwd: string; messages: WsHistoryMessage[] }
+  | { type: "deleteSession.success" }
+  | { type: "prompt.success" }
+  | { type: "interrupt.success" }
+  | { type: "setModel.success" }
+  | WsModelsCatalog;
+
+const shouldShowDesktopSession = (cwd: string): boolean => {
+  if (cwd === "." || cwd === "") {
+    return true;
+  }
+  const cleanCwd = path.resolve(cwd);
+  const tmp = path.resolve(os.tmpdir());
+  if (!cleanCwd.startsWith(tmp + path.sep)) {
+    return true;
+  }
+  try {
+    const rel = path.relative(tmp, cleanCwd);
+    const parts = rel.split(path.sep);
+    for (const part of parts) {
+      if (
+        part.startsWith("Test") ||
+        part.startsWith("enough-test-tree-") ||
+        part.includes("enough-test-tree")
+      ) {
+        return false;
+      }
+    }
+  } catch {
+    return true;
+  }
+  return true;
+};
+
+const mapSessionInfo = (info: info): SessionResponse => {
+  return {
+    id: info.id,
+    path: info.path,
+    cwd: info.cwd,
+    title: info.first_message,
+    createdAt: format_relative(info.modified),
+    created: info.created.toISOString(),
+    modified: info.modified.toISOString(),
+    messageCount: info.message_count,
+  };
+};
+
+const buildHistory = (sm: manager): WsHistoryMessage[] => {
+  const history: WsHistoryMessage[] = [];
+  for (const line of sm.chat_lines()) {
+    if (line.role === "user") {
+      history.push({
+        id: `msg-${history.length}`,
+        role: "user",
+        content: line.text,
+        timestamp: "Just now",
+      });
+    } else if (line.role === "assistant") {
+      history.push({
+        id: `msg-${history.length}`,
+        role: "assistant",
+        content: line.text,
+        thinking: line.thinking,
+        timestamp: "Just now",
+      });
+    } else if (line.role === "tool") {
+      if (history.length > 0 && history[history.length - 1].role === "assistant") {
+        const lastIdx = history.length - 1;
+        if (!history[lastIdx].tools) {
+          history[lastIdx].tools = [];
+        }
+        history[lastIdx].tools!.push({
+          id: `tool-${history[lastIdx].tools!.length}`,
+          name: line.tool_name,
+          arguments: line.tool_args,
+          status: line.tool_error ? "failed" : "completed",
+          result: line.tool_result,
+        });
+      }
+    } else if (line.role === "system" || line.role === "error") {
+      history.push({
+        id: `msg-${history.length}`,
+        role: "system",
+        content: line.text,
+        timestamp: "Just now",
+      });
+    }
+  }
+  return history;
+};
+
+const checkConnected = (providerId: string): Effect.Effect<boolean, never> => {
+  switch (providerId) {
+    case provider_codex:
+      return has_codex_auth();
+    case provider_opencode:
+    case provider_opencode_zen:
+      return has_api_key(provider_opencode);
+    case provider_neuralwatt:
+      return has_api_key(provider_neuralwatt);
+    default:
+      return has_api_key(providerId);
+  }
+};
+
+const refreshDesktopModelRegistry = (): Effect.Effect<void, never> => {
+  return Effect.gen(function* () {
+    // OpenCode and Zen share the same account/key; NeuralWatt has its own.
+    const go_key_res = yield* Effect.either(get_api_key(provider_opencode));
+    if (go_key_res._tag === "Right" && go_key_res.right !== "") {
+      const key = go_key_res.right;
+      yield* Effect.promise(() => default_registry.refresh(undefined, provider_opencode, default_endpoint, key));
+      yield* Effect.promise(() => default_registry.refresh(undefined, provider_opencode_zen, default_zen_endpoint, key));
+    }
+    const neuralwatt_key_res = yield* Effect.either(get_api_key(provider_neuralwatt));
+    if (neuralwatt_key_res._tag === "Right" && neuralwatt_key_res.right !== "") {
+      yield* Effect.promise(() => default_registry.refresh(undefined, provider_neuralwatt, default_neuralwatt_endpoint, neuralwatt_key_res.right));
+    }
+    const has_cdx = yield* has_codex_auth();
+    if (has_cdx) {
+      const creds_res = yield* Effect.either(resolve_codex_credentials(new AbortController().signal));
+      if (creds_res._tag === "Right") {
+        yield* Effect.promise(() => default_registry.refresh_codex(undefined, creds_res.right.access_token));
+      }
+    }
+  }).pipe(
+    Effect.catchAll(() => Effect.void)
+  );
+};
+
+const buildModelsCatalog = (runtime: AgentRuntimeImpl): Effect.Effect<WsModelsCatalog, never> => {
+  return Effect.gen(function* () {
+    const providers = yield* Effect.all(
+      model_providers().map((p) =>
+        Effect.map(checkConnected(p.id), (connected) => ({
+          id: p.id,
+          name: p.name,
+          connected,
+        }))
+      )
+    );
+
+    const models: WsModelDTO[] = [];
+    for (const p of model_providers()) {
+      const pModels = models_for_provider(p.id, default_registry);
+      for (const m of pModels) {
+        const levels = supported_thinking_levels(m.id);
+        const outLevels = levels.map((lvl) => String(lvl));
+        const outLabels = levels.map((lvl) => format_thinking_level_for_model(m.id, lvl));
+        models.push({
+          id: m.id,
+          name: m.name,
+          provider: p.id,
+          contextWindow: m.context_window,
+          contextLabel: format_context_window(m.context_window),
+          reasoning: m.reasoning,
+          thinkingLevels: outLevels,
+          thinkingLevelLabels: outLabels,
+        });
+      }
+    }
+
+    const settings = yield* Effect.either(connection_settings());
+    let provider = provider_opencode;
+    let modelId = "deepseek-v4-flash";
+    if (settings._tag === "Right") {
+      provider = settings.right[0] || provider_opencode;
+      modelId = settings.right[2] || "deepseek-v4-flash";
+    }
+
+    const cfg = runtime.config;
+    let thinking = cfg?.thinking_level || "";
+    if (thinking === "" && supports_thinking(modelId)) {
+      thinking = "medium";
+    }
+
+    let name = modelId;
+    let contextLabel = "";
+    let reasoning = false;
+
+    const pModels = models_for_provider(provider, default_registry);
+    for (const m of pModels) {
+      if (m.id === modelId) {
+        name = m.name;
+        contextLabel = format_context_window(m.context_window);
+        reasoning = m.reasoning;
+        break;
+      }
+    }
+    if (contextLabel === "") {
+      const [m, ok] = lookup_catalog_model(modelId);
+      if (ok) {
+        name = m.name;
+        contextLabel = format_context_window(m.context_window);
+        reasoning = m.reasoning;
+      }
+    }
+
+    const state: WsModelStateDTO = {
+      provider,
+      modelId,
+      modelName: name,
+      thinkingLevel: thinking,
+      contextLabel,
+      reasoning,
+    };
+
+    return {
+      type: "models.catalog" as const,
+      providers,
+      models,
+      state,
+    };
+  });
+};
+
+export class DesktopBridge {
+  constructor(private runtime: AgentRuntimeImpl) {}
+
+  dispatch(command: DesktopCommand): Effect.Effect<DesktopResponse, Error> {
+    const runtime = this.runtime;
+    return Effect.gen(function* () {
+      switch (command.type) {
+        case "listSessions": {
+          const list = yield* runtime.listSessions();
+          const filtered = list
+            .filter((info) => shouldShowDesktopSession(info.cwd))
+            .map(mapSessionInfo);
+          return { type: "session.list" as const, sessions: filtered };
+        }
+        case "openSession": {
+          yield* runtime.openSession(command.id);
+          const sm = runtime.agent.session;
+          if (!sm) {
+            return yield* Effect.fail(new Error("No active session loaded"));
+          }
+          const history = buildHistory(sm);
+          return {
+            type: "session.history" as const,
+            sessionId: sm.session_id(),
+            cwd: sm.cwd(),
+            messages: history,
+          };
+        }
+        case "newSession": {
+          yield* runtime.newSession(command.cwd || undefined);
+          const sm = runtime.agent.session;
+          if (!sm) {
+            return yield* Effect.fail(new Error("No active session loaded"));
+          }
+          return {
+            type: "session.history" as const,
+            sessionId: sm.session_id(),
+            cwd: sm.cwd(),
+            messages: [],
+          };
+        }
+        case "deleteSession": {
+          yield* runtime.deleteSession(command.id);
+          return { type: "deleteSession.success" as const };
+        }
+        case "prompt": {
+          yield* runtime.prompt(command.text, command.attachments || undefined);
+          return { type: "prompt.success" as const };
+        }
+        case "interrupt": {
+          yield* runtime.interrupt();
+          return { type: "interrupt.success" as const };
+        }
+        case "setModel": {
+          yield* runtime.setModel(command.provider, command.model, command.thinkingLevel || undefined);
+          return yield* buildModelsCatalog(runtime);
+        }
+        case "listModels": {
+          yield* refreshDesktopModelRegistry();
+          const catalog = yield* buildModelsCatalog(runtime);
+          return catalog;
+        }
+        default:
+          return yield* Effect.fail(new Error(`Unknown command type: ${(command as any).type}`));
+      }
+    });
+  }
+
+  subscribeEvents(): Stream.Stream<DesktopEvent, never> {
+    return Stream.fromPubSub(this.runtime.pubsub);
+  }
+}
