@@ -11,7 +11,7 @@ import type {
   ModelSelectionState,
   RawMessage,
 } from "./rpc"
-import type { ToolVerb } from "../types"
+import type { ToolVerb, Diff, DiffLine } from "../types"
 import {
   appendText,
   appendThinking,
@@ -41,6 +41,7 @@ interface BackendHistoryTool {
   arguments: string
   status: "running" | "completed" | "failed"
   result?: string
+  details?: string
 }
 
 interface BackendHistoryMessage {
@@ -77,6 +78,7 @@ type BackendMessage =
       arguments: string
       status: "running" | "completed" | "failed"
       result?: string
+      details?: string
     }
   | { type: "done" }
   | { type: "error"; message: string }
@@ -146,12 +148,21 @@ function toolMeta(name: string, argsJson: string): string | undefined {
     const args = JSON.parse(argsJson || "{}")
     const lower = name.toLowerCase()
     if (lower.includes("write") && typeof args.content === "string") {
-      const lines = args.content.split("\n").length
+      const lines = args.content === "" ? 0 : args.content.split("\n").length
       return lines > 0 ? `+${lines}` : undefined
     }
-    if ((lower.includes("edit") || lower.includes("patch")) && typeof args.new_string === "string") {
-      const lines = args.new_string.split("\n").length
-      return lines > 0 ? `+${lines}` : undefined
+    if ((lower.includes("edit") || lower.includes("patch")) && (typeof args.new_string === "string" || typeof args.old_string === "string")) {
+      const added = typeof args.new_string === "string" && args.new_string !== "" ? args.new_string.split("\n").length : 0
+      const removed = typeof args.old_string === "string" && args.old_string !== "" ? args.old_string.split("\n").length : 0
+      if (added > 0 && removed > 0) {
+        return `+${added} -${removed}`
+      }
+      if (added > 0) {
+        return `+${added}`
+      }
+      if (removed > 0) {
+        return `-${removed}`
+      }
     }
   } catch {
     /* ignore */
@@ -159,16 +170,73 @@ function toolMeta(name: string, argsJson: string): string | undefined {
   return undefined
 }
 
+function parseDiffString(file: string, diffStr: string): Diff {
+  const lines: DiffLine[] = []
+  let added = 0
+  let removed = 0
+
+  const rawLines = diffStr.split("\n")
+  for (const line of rawLines) {
+    if (line === "" && rawLines.indexOf(line) === rawLines.length - 1) continue
+    const indicator = line[0]
+    const text = line.slice(1)
+    if (indicator === "-") {
+      lines.push({ type: "remove", text })
+      removed++
+    } else if (indicator === "+") {
+      lines.push({ type: "add", text })
+      added++
+    } else {
+      lines.push({ type: "context", text: line.startsWith(" ") ? text : line })
+    }
+  }
+
+  return {
+    file,
+    added,
+    removed,
+    lines,
+  }
+}
+
 function mapTool(tool: BackendHistoryTool | (BackendMessage & { type: "tool" })): ContentPart {
   const name = tool.name || "tool"
   const args = tool.arguments ?? ""
+  let diff: Diff | undefined = undefined
+
+  if (tool.details) {
+    try {
+      const parsed = JSON.parse(tool.details)
+      if (parsed && typeof parsed.diff === "string") {
+        diff = parseDiffString(toolTitle({ ...tool, name }), parsed.diff)
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  let meta = toolMeta(name, args)
+  if (diff) {
+    if (diff.added > 0 && diff.removed > 0) {
+      meta = `+${diff.added} -${diff.removed}`
+    } else if (diff.added > 0) {
+      meta = `+${diff.added}`
+    } else if (diff.removed > 0) {
+      meta = `-${diff.removed}`
+    } else {
+      meta = undefined
+    }
+  }
+
   return {
     type: "tool",
     tool: toolVerb(name),
     title: toolTitle({ ...tool, name }),
-    meta: toolMeta(name, args),
+    meta,
     status: tool.status === "failed" ? "error" : tool.status === "running" ? "running" : "done",
     output: tool.result,
+    diff,
+    details: tool.details,
   }
 }
 
@@ -497,6 +565,7 @@ class HollowClient {
         const meta = this.toolMetaMap.get(id)
         const prev = this.streamBlocks.find((b) => b.type === "tool" && b.id === id)
         const prevOutput = prev?.type === "tool" ? prev.part.output : undefined
+        const prevDetails = prev?.type === "tool" ? prev.part.details : undefined
         this.streamBlocks = upsertTool(
           this.streamBlocks,
           id,
@@ -507,6 +576,7 @@ class HollowClient {
             arguments: message.arguments || meta?.arguments || "",
             status: message.status ?? "running",
             result: message.result || prevOutput,
+            details: message.details || prevDetails,
           }),
         )
         this.emitAssistantUpdate()

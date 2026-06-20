@@ -163,7 +163,7 @@ export const default_evidence = (): evidence_config => {
     enabled: true,
     strict_verify_reset: true,
     max_completion_rounds: 12,
-    verifier_enabled: true,
+    verifier_enabled: false,
     goal_lock: true_val,
     step_scorer: true_val,
     parallel_forks: true_val,

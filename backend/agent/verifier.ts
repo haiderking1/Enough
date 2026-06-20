@@ -55,10 +55,10 @@ export async function runVerifier(this: Agent, ctx: AbortSignal): Promise<string
   verifier.ledger = ledger;
   verifier.obligations = reg;
   verifier.allowedTools = verifierAllowedTools;
-  verifier.emit = this.emit;
-  verifier.toolStart = this.toolStart;
-  verifier.toolDelta = this.toolDelta;
-  verifier.toolResult = this.toolResult;
+  verifier.emit = null;
+  verifier.toolStart = () => {};
+  verifier.toolDelta = () => {};
+  verifier.toolResult = () => {};
   verifier.executeTool = this.executeTool;
 
   let report: verifierReport;

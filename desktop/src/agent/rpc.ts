@@ -1,5 +1,5 @@
 // Adapter between agent IPC events and the desktop UI data model.
-import type { Block, Message, ToolVerb } from "../types"
+import type { Block, Message, ToolVerb, Diff } from "../types"
 
 // ── Shapes from the agent (we only type what we read) ────────────────────────
 
@@ -12,6 +12,8 @@ export interface ContentPart {
   meta?: string
   status?: "running" | "done" | "error"
   output?: string
+  diff?: Diff
+  details?: string
 }
 
 export interface RawMessage {
@@ -153,6 +155,7 @@ export function mapAssistantContent(content: ContentPart[] | undefined): Block[]
         meta: part.meta,
         status: part.status ?? "done",
         output: part.output,
+        diff: part.diff,
       })
     }
   }

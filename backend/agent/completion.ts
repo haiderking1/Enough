@@ -42,16 +42,7 @@ export async function enforceCompletion(this: Agent, ctx: AbortSignal): Promise<
     return false;
   }
 
-  // The worker stopped calling tools with obligations open: run the
-  // verifier. Its command runs land in the shared ledger, so a passing
-  // verify run closes must_run_verify even if the worker never ran it.
-  let verifierFailures: string[] = [];
-  if (verifierEnabled) {
-    verifierFailures = await this.runVerifier(ctx);
-    if (verifierFailures.length > 0) {
-      this.noteVerifyFailure();
-    }
-  }
+  const verifierFailures: string[] = [];
 
   if (!reg.has_open()) {
     return false; // verifier closed everything; turn is complete

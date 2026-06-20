@@ -43,7 +43,17 @@ export function ToolBlock({ block }: { block: ToolBlockType }) {
         </span>
 
         {block.meta && (
-          <span className="shrink-0 font-mono text-[13px] tabular-nums text-add">{block.meta}</span>
+          <span className="shrink-0 flex gap-1 font-mono text-[13px] tabular-nums">
+            {block.meta.split(" ").map((part, i) => {
+              if (part.startsWith("+")) {
+                return <span key={i} className="text-add">{part}</span>
+              }
+              if (part.startsWith("-")) {
+                return <span key={i} className="text-del">{part}</span>
+              }
+              return <span key={i} className="text-muted-foreground">{part}</span>
+            })}
+          </span>
         )}
 
         <StatusIcon status={block.status} />

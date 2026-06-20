@@ -25,6 +25,7 @@ export type BackendMessage =
       arguments: string;
       status: "running" | "completed" | "failed";
       result?: string;
+      details?: string;
     }
   | { type: "done" }
   | { type: "error"; message: string };
@@ -112,6 +113,7 @@ export const mapAgentEvent = (event: unknown): BackendMessage | null => {
         arguments: string_field(d, "args"),
         status: err ? "failed" : "completed",
         result: string_field(d, "result"),
+        details: d.details ? (typeof d.details === "string" ? d.details : JSON.stringify(d.details)) : undefined,
       };
     }
 

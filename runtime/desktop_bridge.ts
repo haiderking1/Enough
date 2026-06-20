@@ -79,6 +79,7 @@ export type WsHistoryTool = {
   arguments: string;
   status: "completed" | "failed";
   result?: string;
+  details?: string;
 };
 
 export type WsHistoryMessage = {
@@ -257,6 +258,7 @@ const buildHistory = (sm: manager): WsHistoryMessage[] => {
           arguments: line.tool_args,
           status: line.tool_error ? "failed" : "completed",
           result: line.tool_result,
+          details: line.tool_details || undefined,
         });
       }
     } else if (line.role === "system" || line.role === "error") {

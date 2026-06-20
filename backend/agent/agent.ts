@@ -213,9 +213,7 @@ export class Agent {
     emit: ((event: any) => void) | null
   ) => Promise<void>;
 
-  toolStart!: (id: string, name: string, args: string) => void;
-  toolDelta!: (id: string, chunk: string) => void;
-  toolResult!: (id: string, output: string, isErr?: boolean, details?: string) => void;
+
   recordCommandRun!: (command: string, exitCode: number, text: string, duration: number) => void;
   evidenceEnabled!: () => boolean;
   obligationRegistry!: () => obligationsRegistry | null;
@@ -525,6 +523,18 @@ export class Agent {
         data: { id: id, name: name, result: result, error: isErr, details: rawDetails },
       });
     }
+  }
+
+  toolStart(id: string, name: string, args: string): void {
+    this.emitToolStart(id, name, args);
+  }
+
+  toolDelta(id: string, chunk: string): void {
+    this.emitToolDelta(id, chunk);
+  }
+
+  toolResult(id: string, output: string, isErr?: boolean, details?: string): void {
+    this.emitToolResult(id, output, isErr || false, details);
   }
 
   userAbortFired(): boolean {
