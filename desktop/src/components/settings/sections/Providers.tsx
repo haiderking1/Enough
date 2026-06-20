@@ -68,9 +68,9 @@ export function Providers({
   return (
     <div className="space-y-4">
       {settingsError && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 text-[11px] text-red-300">
+        <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 p-2.5 text-[11px] text-danger">
           <span className="flex-1">{settingsError}</span>
-          <button onClick={onClearError} className="text-red-300/70 hover:text-red-200">
+          <button onClick={onClearError} className="text-danger/70 hover:text-danger/80">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
@@ -100,17 +100,17 @@ export function Providers({
       />
 
       {/* Codex uses OAuth device-code login, not a pasteable key. */}
-      <div className="rounded-2xl border border-white/[0.06] bg-[#17171A] p-4">
+      <div className="rounded-2xl border border-border bg-surface p-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-xs font-semibold text-white">OpenAI Codex</div>
-            <div className="text-[10px] text-[#8E8E93]">Sign in with browser</div>
+            <div className="text-xs font-semibold text-foreground">OpenAI Codex</div>
+            <div className="text-[10px] text-muted-foreground">Sign in with browser</div>
           </div>
           <span
             className={
               codexConnected
-                ? "rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-400"
-                : "rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-[#8E8E93]"
+                ? "rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium text-success"
+                : "rounded-full bg-surface-hover px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
             }
           >
             {codexConnected ? "Connected" : "Not connected"}
@@ -118,15 +118,15 @@ export function Providers({
         </div>
         {codexLogin ? (
           <div className="mt-3 space-y-2">
-            <div className="text-[11px] text-[#8E8E93]">Open this URL and enter the code:</div>
-            <a href={codexLogin.verify_url} target="_blank" rel="noreferrer" className="block break-all text-[11px] text-[#3B82F6] underline">
+            <div className="text-[11px] text-muted-foreground">Open this URL and enter the code:</div>
+            <a href={codexLogin.verify_url} target="_blank" rel="noreferrer" className="block break-all text-[11px] text-accent underline">
               {codexLogin.verify_url}
             </a>
-            <div className="select-all font-mono text-base tracking-[0.3em] text-white">{codexLogin.user_code}</div>
-            <div className="text-[10px] text-[#8E8E93]">Waiting for browser sign-in…</div>
+            <div className="select-all font-mono text-base tracking-[0.3em] text-foreground">{codexLogin.user_code}</div>
+            <div className="text-[10px] text-muted-foreground">Waiting for browser sign-in…</div>
             <button
               onClick={onCancelCodexLogin}
-              className="w-full rounded-lg border border-white/10 bg-[#1c1c1f] px-3 py-2 text-xs text-white transition-colors hover:bg-white/[0.06]"
+              className="w-full rounded-lg border border-border-strong bg-surface-hover px-3 py-2 text-xs text-foreground transition-colors hover:bg-surface-hover"
             >
               Cancel
             </button>
@@ -135,7 +135,7 @@ export function Providers({
           <button
             onClick={() => disconnect(CODEX)}
             disabled={pending === CODEX}
-            className="mt-3 w-full rounded-lg border border-white/10 bg-[#1c1c1f] px-3 py-2 text-xs text-white transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+            className="mt-3 w-full rounded-lg border border-border-strong bg-surface-hover px-3 py-2 text-xs text-foreground transition-colors hover:bg-surface-hover disabled:opacity-50"
           >
             {pending === CODEX ? "Disconnecting…" : "Disconnect"}
           </button>
@@ -146,7 +146,7 @@ export function Providers({
               onStartCodexLogin()
             }}
             disabled={pending === CODEX}
-            className="mt-3 w-full rounded-lg bg-[#3B82F6] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[#3B82F6]/90 disabled:opacity-50"
+            className="mt-3 w-full rounded-lg bg-accent px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
           >
             {pending === CODEX ? "Starting…" : "Connect Codex"}
           </button>
@@ -154,12 +154,12 @@ export function Providers({
       </div>
 
       {/* Active model */}
-      <div className="space-y-3 border-t border-white/[0.06] pt-5">
+      <div className="space-y-3 border-t border-border pt-5">
         <SettingsCard>
           <div className="flex items-center justify-between gap-6 py-4">
             <div>
-              <div className="text-[15px] font-semibold text-white">Provider</div>
-              <p className="mt-1 text-[13px] text-[#8E8E93]">
+              <div className="text-[15px] font-semibold text-foreground">Provider</div>
+              <p className="mt-1 text-[13px] text-muted-foreground">
                 {anyConnected ? "Switch the active provider for new prompts." : "Connect a provider above to switch models."}
               </p>
             </div>
@@ -170,8 +170,8 @@ export function Providers({
               options={providers.map((p) => ({ value: p, label: p }))}
             />
           </div>
-          <div className="flex items-center justify-between gap-6 border-t border-white/[0.06] py-4">
-            <div className="text-[15px] font-semibold text-white">Model</div>
+          <div className="flex items-center justify-between gap-6 border-t border-border py-4">
+            <div className="text-[15px] font-semibold text-foreground">Model</div>
             <PillSelect
               width={180}
               value={currentModel?.provider === provider ? currentModelId ?? "" : ""}

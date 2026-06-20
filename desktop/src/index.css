@@ -27,6 +27,8 @@
   --color-add-bg: var(--add-bg);
   --color-del: var(--del);
   --color-del-bg: var(--del-bg);
+  --color-toggle-off: var(--toggle-off);
+  --color-icon-inactive: var(--icon-inactive);
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -34,32 +36,38 @@
 }
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededec;
-  --sidebar: #141413;
-  --surface: #1a1a18;
-  --surface-hover: #232321;
-  --elevated: #1e1e1c;
-  --border: #262624;
-  --border-strong: #34332f;
-  --muted: #141413;
-  --muted-foreground: #8a8985;
-  --accent: #d97757;
-  --accent-foreground: #1a1a18;
-  --accent-muted: #c96442;
-  --success: #6cae5e;
-  --danger: #e0696b;
+  /* Dark theme — the single palette for the whole app (main window, sidebar,
+     chat, and Settings). Matches the Settings spec: page #0E0E10, card #17171A,
+     hairline rgba(255,255,255,0.06) borders, blue #3B82F6 accent. */
+  --background: #0E0E10;
+  --foreground: #E6E6E8;
+  --sidebar: #0E0E10;
+  --surface: #17171A;
+  --surface-hover: #1c1c1f;
+  --elevated: #1c1c1f;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --muted: #17171A;
+  --muted-foreground: #8E8E93;
+  --icon-inactive: #6B6B70;
+  --toggle-off: #2C2C2E;
+  --accent: #3B82F6;
+  --accent-foreground: #FFFFFF;
+  --accent-muted: #2f6fde;
+  --success: #3fb950;
+  --danger: #f87171;
   --warning: #e0a96b;
-  --info: #4a90d9;
-  --add: #87bd80;
-  --add-bg: rgba(127, 176, 105, 0.12);
-  --del: #e0696b;
-  --del-bg: rgba(224, 105, 107, 0.12);
+  --info: #60a5fa;
+  --add: #3fb950;
+  --add-bg: rgba(63, 185, 80, 0.12);
+  --del: #f87171;
+  --del-bg: rgba(248, 113, 113, 0.12);
 }
 
 /* Light theme — applied via document.documentElement.dataset.theme = "light".
    Components use semantic tokens (var(--background), etc.), so overriding the
-   variables here cascades to the whole app without per-component dark: variants. */
+   variables here cascades to the whole app without per-component dark: variants.
+   Accent is blue in both themes for consistency. */
 :root[data-theme="light"] {
   --background: #fbf1c7;
   --foreground: #3c3836;
@@ -67,13 +75,15 @@
   --surface: #ebdbb9;
   --surface-hover: #dace9e;
   --elevated: #e6d7a8;
-  --border: #d5c39a;
-  --border-strong: #c2af7d;
+  --border: rgba(60, 56, 54, 0.12);
+  --border-strong: rgba(60, 56, 54, 0.22);
   --muted: #ebdbb9;
   --muted-foreground: #7c6f64;
-  --accent: #c44a26;
-  --accent-foreground: #fbf1c7;
-  --accent-muted: #a83d1d;
+  --icon-inactive: #a8a29e;
+  --toggle-off: #d6d3cb;
+  --accent: #2563eb;
+  --accent-foreground: #FFFFFF;
+  --accent-muted: #1d4ed8;
   --success: #427b58;
   --danger: #cc241d;
   --warning: #b57614;

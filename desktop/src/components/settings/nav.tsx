@@ -9,6 +9,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "../../lib/utils"
+import { TrafficLights } from "../TrafficLights"
 
 export type SectionId =
   | "general"
@@ -43,8 +44,13 @@ export function SettingsNav({
   onBack: () => void
 }) {
   return (
-    <nav className="flex w-60 shrink-0 flex-col bg-[#0E0E10] py-4">
-      <div className="flex flex-col gap-0.5 px-3">
+    <nav className="flex w-60 shrink-0 flex-col bg-background">
+      {/* Top-left window controls — same spot as the main window's dots. */}
+      <header className="app-drag flex h-11 shrink-0 items-center px-4">
+        <TrafficLights />
+      </header>
+
+      <div className="flex flex-col gap-0.5 px-3 py-2">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon
           const isActive = item.id === active
@@ -55,14 +61,13 @@ export function SettingsNav({
               className={cn(
                 "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors",
                 isActive
-                  ? "font-medium text-white"
-                  : "font-normal text-[#8E8E93] hover:bg-white/[0.04] hover:text-white",
+                  ? "font-medium text-foreground"
+                  : "font-normal text-muted-foreground hover:bg-surface-hover hover:text-foreground",
               )}
             >
               <Icon
-                className="h-[18px] w-[18px]"
+                className={cn("h-[18px] w-[18px]", isActive ? "text-foreground" : "text-icon-inactive")}
                 strokeWidth={1.75}
-                style={{ color: isActive ? "#FFFFFF" : "#6B6B70" }}
               />
               {item.label}
             </button>
@@ -71,12 +76,12 @@ export function SettingsNav({
       </div>
 
       {/* Bottom action, separated by space */}
-      <div className="mt-auto flex flex-col gap-0.5 px-3">
+      <div className="mt-auto flex flex-col gap-0.5 px-3 pb-4">
         <button
           onClick={onBack}
-          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-[#8E8E93] transition-colors hover:bg-white/[0.04] hover:text-white"
+          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
         >
-          <ArrowLeft className="h-[18px] w-[18px]" strokeWidth={1.75} style={{ color: "#6B6B70" }} />
+          <ArrowLeft className="h-[18px] w-[18px] text-icon-inactive" strokeWidth={1.75} />
           Back
         </button>
       </div>

@@ -30,26 +30,26 @@ export function Archive({
       {archived.map((s, i) => (
         <div
           key={s.id}
-          className={`flex items-center justify-between gap-4 py-4 ${i < archived.length - 1 ? "border-b border-white/[0.06]" : ""}`}
+          className={`flex items-center justify-between gap-4 py-4 ${i < archived.length - 1 ? "border-b border-border" : ""}`}
         >
           <div className="min-w-0">
-            <div className="truncate text-[14px] font-semibold text-white">
+            <div className="truncate text-[14px] font-semibold text-foreground">
               {threadAliases[s.id] || s.name || s.firstMessage || "Untitled session"}
             </div>
-            <div className="mt-0.5 truncate text-[12px] text-[#8E8E93]">{s.cwd}</div>
+            <div className="mt-0.5 truncate text-[12px] text-muted-foreground">{s.cwd}</div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <button
               onClick={() => onUnhide(s.id)}
               title="Unhide"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-[#1c1c1f] text-[#8E8E93] transition-colors hover:text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-strong bg-surface-hover text-muted-foreground transition-colors hover:text-foreground"
             >
               <RotateCcw className="h-4 w-4" strokeWidth={2} />
             </button>
             <button
               onClick={() => onDelete(s.id)}
               title="Delete permanently"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-[#1c1c1f] text-[#8E8E93] transition-colors hover:text-red-400"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-border-strong bg-surface-hover text-muted-foreground transition-colors hover:text-danger"
             >
               <Trash2 className="h-4 w-4" strokeWidth={2} />
             </button>

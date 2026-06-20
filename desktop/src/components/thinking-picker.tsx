@@ -70,8 +70,8 @@ export function ThinkingPicker({ model, levels, value, disabled, onChange }: Thi
       />
 
       {open && (
-        <div className="absolute bottom-full left-0 z-50 mb-2 w-[220px] overflow-hidden rounded-xl border border-border-strong bg-[#121211] shadow-2xl ring-1 ring-white/5">
-          <div className="flex items-center gap-2 border-b border-border bg-[#0d0d0c] px-3 py-2">
+        <div className="absolute bottom-full left-0 z-50 mb-2 w-[220px] overflow-hidden rounded-xl border border-border-strong bg-surface shadow-2xl ring-1 ring-white/5">
+          <div className="flex items-center gap-2 border-b border-border bg-background px-3 py-2">
             <Brain className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={1.75} />
             <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Thinking

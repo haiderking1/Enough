@@ -16,11 +16,11 @@ export function Keybindings() {
         <div
           key={s.label}
           className={`flex items-center justify-between gap-6 py-4 ${
-            i < SHORTCUTS.length - 1 ? "border-b border-white/[0.06]" : ""
+            i < SHORTCUTS.length - 1 ? "border-b border-border" : ""
           }`}
         >
-          <span className="text-[14px] text-white">{s.label}</span>
-          <kbd className="rounded-[8px] border border-white/10 bg-[#1c1c1f] px-2 py-1 font-mono text-[12px] text-[#cfcfd2]">
+          <span className="text-[14px] text-foreground">{s.label}</span>
+          <kbd className="rounded-[8px] border border-border-strong bg-surface-hover px-2 py-1 font-mono text-[12px] text-foreground">
             {s.keys}
           </kbd>
         </div>

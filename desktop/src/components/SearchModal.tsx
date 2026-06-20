@@ -39,7 +39,7 @@ export function SearchModal({ open, onClose, onOpenSettings }: SearchModalProps)
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[560px] overflow-hidden rounded-xl border border-border-strong bg-[#181816] shadow-2xl"
+        className="w-full max-w-[560px] overflow-hidden rounded-xl border border-border-strong bg-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input Bar */}

@@ -12,13 +12,13 @@ export function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: 
       onClick={() => onChange(!checked)}
       className={cn(
         "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-150",
-        checked ? "bg-[#3B82F6]" : "bg-[#2C2C2E]",
+        checked ? "bg-accent" : "bg-toggle-off",
       )}
     >
       <span
         className={cn(
           "absolute top-1/2 h-[18px] w-[18px] -translate-y-1/2 rounded-full transition-all duration-150",
-          checked ? "left-[23px] bg-white" : "left-[3px] bg-[#6B6B70]",
+          checked ? "left-[23px] bg-foreground" : "left-[3px] bg-icon-inactive",
         )}
       />
     </button>
@@ -43,15 +43,15 @@ export function PillSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 w-full cursor-pointer appearance-none rounded-[10px] border border-white/10 bg-[#1c1c1f] pl-3 pr-8 text-sm text-white outline-none transition-colors hover:border-white/20 focus-visible:border-[#3B82F6]"
+        className="h-9 w-full cursor-pointer appearance-none rounded-[10px] border border-border-strong bg-surface-hover pl-3 pr-8 text-sm text-foreground outline-none transition-colors hover:border-border-strong focus-visible:border-accent"
       >
         {options.map((o) => (
-          <option key={o.value} value={o.value} className="bg-[#17171A] text-white">
+          <option key={o.value} value={o.value} className="bg-surface text-foreground">
             {o.label}
           </option>
         ))}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-2.5 h-4 w-4 text-[#8E8E93]" strokeWidth={2} />
+      <ChevronDown className="pointer-events-none absolute right-2.5 h-4 w-4 text-muted-foreground" strokeWidth={2} />
     </div>
   )
 }
@@ -72,13 +72,13 @@ export function SettingRow({
   children: React.ReactNode
 }) {
   return (
-    <div className={cn("flex items-center justify-between gap-6 py-5", !isLast && "border-b border-white/[0.06]")}>
+    <div className={cn("flex items-center justify-between gap-6 py-5", !isLast && "border-b border-border")}>
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-[15px] font-semibold text-white">{label}</span>
+          <span className="text-[15px] font-semibold text-foreground">{label}</span>
           {icon}
         </div>
-        {subtitle && <p className="mt-1 truncate text-[13px] text-[#8E8E93]">{subtitle}</p>}
+        {subtitle && <p className="mt-1 truncate text-[13px] text-muted-foreground">{subtitle}</p>}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -88,7 +88,7 @@ export function SettingRow({
 /* The rounded card that holds settings rows. */
 export function SettingsCard({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("rounded-2xl border border-white/[0.06] bg-[#17171A] px-8", className)}>{children}</div>
+    <div className={cn("rounded-2xl border border-border bg-surface px-8", className)}>{children}</div>
   )
 }
 
@@ -96,7 +96,7 @@ export function SettingsCard({ children, className }: { children: React.ReactNod
 export function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
     <div className="mb-5">
-      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8E8E93]">{children}</h2>
+      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{children}</h2>
     </div>
   )
 }
@@ -112,10 +112,10 @@ export function EmptyState({
   children?: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-white/[0.06] bg-[#17171A] px-8 py-16 text-center">
-      <div className="mb-3 text-[#6B6B70]">{icon}</div>
-      <div className="text-sm font-semibold text-white">{title}</div>
-      {children && <p className="mt-1.5 max-w-sm text-[13px] text-[#8E8E93]">{children}</p>}
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-surface px-8 py-16 text-center">
+      <div className="mb-3 text-icon-inactive">{icon}</div>
+      <div className="text-sm font-semibold text-foreground">{title}</div>
+      {children && <p className="mt-1.5 max-w-sm text-[13px] text-muted-foreground">{children}</p>}
     </div>
   )
 }
@@ -125,7 +125,7 @@ export function StatusBadge({ connected }: { connected: boolean }) {
     <span
       className={cn(
         "rounded-full px-2 py-0.5 text-[10px] font-medium",
-        connected ? "bg-emerald-500/15 text-emerald-400" : "bg-white/[0.06] text-[#8E8E93]",
+        connected ? "bg-success/15 text-success" : "bg-surface-hover text-muted-foreground",
       )}
     >
       {connected ? "Connected" : "Not connected"}
@@ -154,11 +154,11 @@ export function KeyCard({
   onDisconnect: () => void
 }) {
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-[#17171A] p-4">
+    <div className="rounded-2xl border border-border bg-surface p-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-xs font-semibold text-white">{title}</div>
-          <div className="text-[10px] text-[#8E8E93]">{hint}</div>
+          <div className="text-xs font-semibold text-foreground">{title}</div>
+          <div className="text-[10px] text-muted-foreground">{hint}</div>
         </div>
         <StatusBadge connected={connected} />
       </div>
@@ -166,7 +166,7 @@ export function KeyCard({
         <button
           onClick={onDisconnect}
           disabled={pending}
-          className="mt-3 w-full rounded-lg border border-white/10 bg-[#1c1c1f] px-3 py-2 text-xs text-white transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+          className="mt-3 w-full rounded-lg border border-border-strong bg-surface-hover px-3 py-2 text-xs text-foreground transition-colors hover:bg-surface-hover disabled:opacity-50"
         >
           {pending ? "Disconnecting…" : "Disconnect"}
         </button>
@@ -179,12 +179,12 @@ export function KeyCard({
             placeholder="Paste API key"
             autoComplete="off"
             spellCheck={false}
-            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#1c1c1f] px-3 py-2 text-xs text-white outline-none focus-visible:border-[#3B82F6]"
+            className="min-w-0 flex-1 rounded-lg border border-border-strong bg-surface-hover px-3 py-2 text-xs text-foreground outline-none focus-visible:border-accent"
           />
           <button
             onClick={onConnect}
             disabled={pending || keyValue.trim() === ""}
-            className="shrink-0 rounded-lg bg-[#3B82F6] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[#3B82F6]/90 disabled:opacity-50"
+            className="shrink-0 rounded-lg bg-accent px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-accent/90 disabled:opacity-50"
           >
             {pending ? "Connecting…" : "Connect"}
           </button>

@@ -19,19 +19,19 @@ export function Connections({ connections }: { connections: ConnectionInfo[] }) 
       {list.map((c, i) => (
         <div
           key={c.provider}
-          className={`flex items-center justify-between gap-6 py-4 ${i < list.length - 1 ? "border-b border-white/[0.06]" : ""}`}
+          className={`flex items-center justify-between gap-6 py-4 ${i < list.length - 1 ? "border-b border-border" : ""}`}
         >
           <div>
-            <div className="text-[14px] font-semibold text-white">{c.displayName || LABELS[c.provider] || c.provider}</div>
-            <div className="mt-0.5 text-[12px] text-[#8E8E93]">{c.kind === "oauth" ? "OAuth sign-in" : "API key"}</div>
+            <div className="text-[14px] font-semibold text-foreground">{c.displayName || LABELS[c.provider] || c.provider}</div>
+            <div className="mt-0.5 text-[12px] text-muted-foreground">{c.kind === "oauth" ? "OAuth sign-in" : "API key"}</div>
           </div>
           {c.connected ? (
-            <span className="flex items-center gap-1.5 text-[12px] text-emerald-400">
+            <span className="flex items-center gap-1.5 text-[12px] text-success">
               <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
               Connected
             </span>
           ) : (
-            <span className="flex items-center gap-1.5 text-[12px] text-[#8E8E93]">
+            <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
               <Circle className="h-4 w-4" strokeWidth={2} />
               Not connected
             </span>

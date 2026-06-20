@@ -36,7 +36,7 @@ export function General({
           <button
             onClick={resetTheme}
             title="Reset to default"
-            className="text-[#6B6B70] transition-colors hover:text-white"
+            className="text-icon-inactive transition-colors hover:text-foreground"
           >
             <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} />
           </button>

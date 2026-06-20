@@ -227,9 +227,9 @@ export function ModelPicker({ catalog, disabled, isStreaming, onSelect }: ModelP
         />
 
         {open && (
-          <div className="absolute bottom-full left-0 z-50 mb-2 w-[min(100vw-3rem,420px)] overflow-hidden rounded-xl border border-border-strong bg-[#121211] shadow-2xl">
+          <div className="absolute bottom-full left-0 z-50 mb-2 w-[min(100vw-3rem,420px)] overflow-hidden rounded-xl border border-border-strong bg-surface shadow-2xl">
             <div className="flex h-[360px]">
-              <aside className="flex w-[48px] shrink-0 flex-col items-center gap-1 border-r border-border bg-[#0d0d0c] py-2">
+              <aside className="flex w-[48px] shrink-0 flex-col items-center gap-1 border-r border-border bg-background py-2">
                 <SidebarBtn
                   active={sidebarTab === "favorites"}
                   onClick={() => setSidebarTab("favorites")}
