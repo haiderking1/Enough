@@ -24,7 +24,7 @@ export class searxng_provider implements provider {
   ): Effect.Effect<search_result[], Error> {
     return Effect.tryPromise({
       try: async () => {
-        let maxResults = opts.maxResults;
+        let maxResults = opts.maxResults || default_max_results;
         if (maxResults <= 0) {
           maxResults = default_max_results;
         }
@@ -32,13 +32,13 @@ export class searxng_provider implements provider {
           maxResults = max_results_cap;
         }
 
-        const buildQuery = build_search_query(query, opts.site);
+        const buildQuery = build_search_query(query, opts.site ?? "");
 
         const base = this.base_url.replace(/\/+$/, "");
         const u = new URL(`${base}/search`);
         u.searchParams.set("q", buildQuery);
         u.searchParams.set("format", "json");
-        if (opts.engines && opts.engines.trim() !== "") {
+        if (opts.engines && typeof opts.engines === "string" && opts.engines.trim() !== "") {
           u.searchParams.set("engines", opts.engines.trim());
         }
 
@@ -105,9 +105,9 @@ export class searxng_provider implements provider {
   }
 }
 
-export const build_search_query = (query: string, site: string): string => {
+export const build_search_query = (query: string, site?: string): string => {
   const q = query.trim();
-  const s = site.trim();
+  const s = (site ?? "").trim();
   if (s === "") {
     return q;
   }
@@ -118,7 +118,7 @@ export const build_search_query = (query: string, site: string): string => {
   return `site:${cleanSite} ${q}`;
 };
 
-export const url_excluded = (rawURL: string, excludes: string[]): boolean => {
+export const url_excluded = (rawURL: string, excludes?: string[]): boolean => {
   if (!excludes || excludes.length === 0) {
     return false;
   }

@@ -16,7 +16,13 @@ export const stop = (): Effect.Effect<void, never> => {
 export const new_search_provider = (ctx: AbortSignal): Effect.Effect<provider, Error> => {
   return ensure_running(ctx).pipe(
     Effect.map((base) => new searxng_provider(base)),
-    Effect.mapError((err) => (err instanceof Error ? err : new Error(String(err)))),
+    Effect.mapError((err: any) => {
+      if (err instanceof Error) return err;
+      if (err && typeof err === "object" && typeof err.reason === "string") {
+        return new Error(err.reason);
+      }
+      return new Error(String(err));
+    }),
   );
 };
 

@@ -9,8 +9,16 @@ import { Effect } from "effect";
 import { searxng_error, type searxng_error as searxng_error_type } from "./error";
 import { write_state, read_state } from "./state";
 
-// TODO: embed real settings.yml at build time (currently a placeholder).
-const default_settings = new TextEncoder().encode("port: 18752\n");
+// Load real settings.yml or fallback with secret_key
+const default_settings = (): Uint8Array => {
+  try {
+    const p = path.join(__dirname, "settings.yml");
+    if (fs.existsSync(p)) {
+      return fs.readFileSync(p);
+    }
+  } catch {}
+  return new TextEncoder().encode("port: 18752\nserver:\n  secret_key: \"enough-local-searxng\"\n");
+};
 
 const repo_url = "https://github.com/searxng/searxng.git";
 const health_timeout_ms = 90_000;
@@ -220,7 +228,7 @@ export class manager {
     const self = this;
     return Effect.gen(function* () {
       const text = new TextDecoder()
-        .decode(default_settings)
+        .decode(default_settings())
         .replaceAll("port: 18752", `port: ${port.toString()}`);
       const p = path.join(self._data_dir, "settings.yml");
       yield* Effect.try({
@@ -322,17 +330,28 @@ const wait_healthy = (ctx: AbortSignal, base: string): Effect.Effect<void, searx
   }).pipe(Effect.catchAll((cause) => Effect.fail(searxng_error("wait healthy", cause))));
 
 const free_port = (): Effect.Effect<number, searxng_error_type> =>
-  Effect.try({
-    try: () => {
-      const server = net.createServer();
-      server.listen(0, "127.0.0.1");
-      const address = server.address();
-      server.close();
-      if (address === null || typeof address === "string") {
-        throw new Error("invalid listen address");
-      }
-      return address.port;
-    },
+  Effect.tryPromise({
+    try: () =>
+      new Promise<number>((resolve, reject) => {
+        const server = net.createServer();
+        // listen() is async: address() is only valid after 'listening'.
+        // Reading it synchronously returns null under Node (Electron's runtime),
+        // which is what surfaced as the "free port" error.
+        server.once("listening", () => {
+          const address = server.address();
+          server.close();
+          if (address === null || typeof address === "string") {
+            reject(new Error("invalid listen address"));
+            return;
+          }
+          resolve(address.port);
+        });
+        server.once("error", (err) => {
+          server.close();
+          reject(err);
+        });
+        server.listen(0, "127.0.0.1");
+      }),
     catch: (cause) => searxng_error("free port", cause),
   });
 

@@ -21,8 +21,8 @@ function truncate(text: string, max = 72) {
 export function ToolBlock({ block }: { block: ToolBlockType }) {
   const hasBody = Boolean(block.output || block.diff)
   const [open, setOpen] = useState(false)
-  const isBash = block.tool === "Bash"
-  const label = isBash ? truncate(block.title) : displayPath(block.title)
+  const isFileTool = block.tool === "Write" || block.tool === "Edit" || block.tool === "Read"
+  const label = isFileTool ? displayPath(block.title) : truncate(block.title)
 
   return (
     <div className="min-w-0">

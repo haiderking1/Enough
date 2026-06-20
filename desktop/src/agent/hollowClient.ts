@@ -117,7 +117,8 @@ function toolVerb(name?: string): ToolVerb {
   const lower = (name ?? "tool").toLowerCase()
   if (lower.includes("write")) return "Write"
   if (lower.includes("edit") || lower.includes("patch")) return "Edit"
-  if (lower.includes("read") || lower.includes("file") || lower.includes("dir") || lower.includes("glob")) return "Read"
+  if (lower.includes("read") || lower.includes("file") || lower.includes("dir")) return "Read"
+  if (lower.includes("glob")) return "Glob"
   if (lower.includes("grep")) return "Grep"
   if (lower.includes("search") || lower.includes("find") || lower.includes("browser")) return "Search"
   if (lower.includes("task") || lower.includes("agent") || lower.includes("skill") || lower.includes("memory")) return "Task"
@@ -136,6 +137,9 @@ function toolTitle(tool: BackendHistoryTool | (BackendMessage & { type: "tool" }
       args.path ||
       args.filename ||
       args.pattern ||
+      args.query ||
+      args.url ||
+      (Array.isArray(args.urls) ? args.urls.join(", ") : "") ||
       tool.name
     )
   } catch {
