@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Network, Check, X, CircleSlash, Loader2, ChevronRight } from "lucide-react"
+import { useEffect, useState } from "react"
+import { ChevronRight } from "lucide-react"
 import type { Block } from "../types"
 import { cn } from "../lib/utils"
 
@@ -22,9 +22,6 @@ type DoneState = {
   agents: SwarmAgent[]
 }
 
-// While running, output is streamed delta lines like:
-//   agent_swarm: planning subtasks…
-//   agent_swarm: 1/2 agents finished
 function parseProgress(output: string): { completed: number; total: number; planning: boolean } | null {
   let completed = 0
   let total = 0
@@ -41,10 +38,6 @@ function parseProgress(output: string): { completed: number; total: number; plan
   return null
 }
 
-// When done, output is the aggregated report:
-//   Ran N agent(s) at concurrency C — X ok[, Y error][, Z aborted].
-//   ## <id> [status] (turns[ ×N]) (worktree: … · branch: …)
-//   <body>
 function parseDone(output: string): DoneState {
   const res: DoneState = { ok: 0, error: 0, aborted: 0, total: 0, goal: "", agents: [] }
   const lines = output.split("\n")
@@ -96,32 +89,103 @@ function parseDone(output: string): DoneState {
   return res
 }
 
-function StatusGlyph({ status }: { status: SwarmAgent["status"] }) {
-  if (status === "ok") return <Check className="h-3.5 w-3.5 shrink-0 text-success" strokeWidth={2.5} />
-  if (status === "error") return <X className="h-3.5 w-3.5 shrink-0 text-danger" strokeWidth={2.5} />
-  return <CircleSlash className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={2.5} />
+// Claude Code's braille spinner: ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏
+const BRAILLE = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+function useSpinner(active: boolean, offset = 0) {
+  const [i, setI] = useState(offset % BRAILLE.length)
+  useEffect(() => {
+    if (!active) return
+    const id = setInterval(() => setI((v) => (v + 1) % BRAILLE.length), 80)
+    return () => clearInterval(id)
+  }, [active])
+  return active ? BRAILLE[i] : ""
 }
 
-function chipClass(status: SwarmAgent["status"] | "running" | "planning"): string {
-  switch (status) {
-    case "ok":
-      return "border-success/40 bg-success/10 text-success"
-    case "error":
-      return "border-danger/40 bg-danger/10 text-danger"
-    case "aborted":
-      return "border-border bg-muted text-muted-foreground"
-    case "running":
-      return "border-warning/40 bg-warning/10 text-warning animate-pulse-dot"
-    case "planning":
-      return "border-info/40 bg-info/10 text-info animate-pulse-dot"
-  }
+type SlotStatus = "ok" | "error" | "aborted" | "running"
+
+function statusLabel(s: SlotStatus): { text: string; cls: string } {
+  if (s === "error") return { text: "Error", cls: "text-danger" }
+  if (s === "aborted") return { text: "Aborted", cls: "text-muted-foreground" }
+  if (s === "ok") return { text: "Done", cls: "text-muted-foreground" }
+  return { text: "", cls: "text-info" }
+}
+
+// Leading circle per agent: hollow while running, filled green when done.
+function AgentCircle({ status }: { status: SlotStatus }) {
+  if (status === "ok") return <span className="size-2.5 shrink-0 rounded-full bg-success" />
+  if (status === "error") return <span className="size-2.5 shrink-0 rounded-full bg-danger" />
+  if (status === "aborted") return <span className="size-2.5 shrink-0 rounded-full bg-muted-foreground/50" />
+  return <span className="size-2.5 shrink-0 rounded-full ring-1 ring-foreground/55" />
+}
+
+function AgentRow({
+  id,
+  status,
+  turns,
+  worktree,
+  body,
+  index,
+}: {
+  id: string
+  status: SlotStatus
+  turns?: string
+  worktree?: string
+  body?: string
+  index: number
+}) {
+  const hasBody = Boolean(body && body.trim() !== "")
+  const [open, setOpen] = useState(false)
+  // Spinner removed per request. The hook call is kept inactive so hot-reload
+  // doesn't trip on a hook-count change (HMR can't swap out a removed hook).
+  // Safe to delete together with useSpinner/BRAILLE after a full window reload.
+  void useSpinner(false, index)
+  const label = statusLabel(status)
+  return (
+    <div>
+      <button
+        type="button"
+        disabled={!hasBody}
+        onClick={() => hasBody && setOpen((o) => !o)}
+        className={cn(
+          "flex w-full items-center gap-2 text-left font-mono text-[12.5px] leading-[1.55]",
+          hasBody && "cursor-pointer transition-colors hover:opacity-90",
+          !hasBody && "cursor-default",
+        )}
+      >
+        <AgentCircle status={status} />
+        <span className="shrink-0 text-foreground">{id}</span>
+        {turns && <span className="shrink-0 text-muted-foreground">  ·  {turns}</span>}
+        {worktree && (
+          <span className="min-w-0 truncate text-muted-foreground/70" title={worktree}>
+            {worktree}
+          </span>
+        )}
+        {status !== "running" && <span className={cn("shrink-0", label.cls)}>{label.text}</span>}
+        {hasBody && (
+          <ChevronRight
+            className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground/45 transition-transform", open && "rotate-90")}
+            strokeWidth={2}
+          />
+        )}
+      </button>
+      {open && hasBody && (
+        <pre
+          className={cn(
+            "ml-4 overflow-x-auto whitespace-pre-wrap border-l border-border/50 py-1 pl-4 font-mono text-[12px] leading-relaxed",
+            status === "error" ? "text-danger/90" : "text-muted-foreground",
+          )}
+        >
+          {body}
+        </pre>
+      )}
+    </div>
+  )
 }
 
 export function SwarmAgentBlock({ block }: { block: ToolBlockType }) {
   const running = block.status === "running"
   const output = block.output ?? ""
-
-  const [open, setOpen] = useState(running)
 
   const progress = running ? parseProgress(output) : null
   const done = !running ? parseDone(output) : null
@@ -130,159 +194,43 @@ export function SwarmAgentBlock({ block }: { block: ToolBlockType }) {
   const completed = progress?.completed ?? done?.ok ?? 0
   const planning = progress?.planning ?? false
 
-  const hasDetail = output.trim() !== ""
-  const pct = total > 0 ? Math.min(100, (completed / total) * 100) : 0
+  const slots: { id: string; status: SlotStatus; turns?: string; worktree?: string; body?: string }[] = []
+  if (done && done.agents.length > 0) {
+    for (const a of done.agents) slots.push({ id: a.id, status: a.status, turns: a.turns, worktree: a.worktree, body: a.body })
+  } else if (total > 0) {
+    for (let i = 0; i < total; i++) slots.push({ id: `agent-${i + 1}`, status: i < completed ? "ok" : "running" })
+  } else if (planning) {
+    slots.push({ id: "planning", status: "running" })
+  }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface">
-      {/* header */}
-      <button
-        type="button"
-        disabled={!hasDetail}
-        onClick={() => hasDetail && setOpen((o) => !o)}
-        className={cn(
-          "flex w-full items-center gap-2 px-3 py-2 text-left",
-          hasDetail && "transition-colors hover:bg-surface-hover",
-          !hasDetail && "cursor-default",
-        )}
-      >
-        <Network
-          className={cn(
-            "h-4 w-4 shrink-0",
-            running ? "text-info animate-pulse-dot" : "text-accent",
-          )}
-          strokeWidth={2.25}
-        />
+    <div className="font-mono text-[12.5px] leading-[1.55]">
+      {/* header: blue ⏺ bullet + tool name */}
+      <div className="flex items-center gap-2">
+        <span className="inline-block size-2.5 shrink-0 rounded-full bg-info" />
         <span className="shrink-0 text-[13px] font-semibold text-foreground">Swarm Agent</span>
         {block.title && block.title !== "agent_swarm" && (
-          <span className="min-w-0 truncate font-mono text-[12px] text-muted-foreground" title={block.title}>
+          <span className="min-w-0 truncate text-muted-foreground" title={block.title}>
             {block.title}
           </span>
         )}
-        <span className="ml-auto flex items-center gap-2">
-          <span className="font-mono text-[11px] text-muted-foreground">
-            {running
-              ? total > 0
-                ? `${completed}/${total}`
-                : planning
-                  ? "planning"
-                  : "starting"
-              : done
-                ? `${done.ok}/${done.total} ok${done.error > 0 ? ` · ${done.error} err` : ""}${done.aborted > 0 ? ` · ${done.aborted} abort` : ""}`
-                : ""}
-          </span>
-          {running ? (
-            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" strokeWidth={2} />
-          ) : done && done.error > 0 ? (
-            <X className="h-3.5 w-3.5 shrink-0 text-danger" strokeWidth={2.5} />
-          ) : (
-            <Check className="h-3.5 w-3.5 shrink-0 text-success" strokeWidth={2.5} />
-          )}
-          {hasDetail && (
-            <ChevronRight
-              className={cn(
-                "h-3.5 w-3.5 shrink-0 text-muted-foreground/45 transition-transform",
-                open && "rotate-90",
-              )}
-              strokeWidth={2}
-            />
-          )}
-        </span>
-      </button>
+        {total > 0 && <span className="shrink-0 tabular-nums text-muted-foreground">{completed}/{total}</span>}
+      </div>
 
-      {/* progress bar while running */}
-      {running && total > 0 && (
-        <div className="h-[3px] w-full bg-muted">
-          <div
-            className="h-full bg-info transition-[width] duration-300 ease-out"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      )}
-
-      {/* agent chips */}
-      {total > 0 && (
-        <div className="flex flex-wrap gap-1.5 px-3 py-2">
-          {done
-            ? done.agents.map((a, i) => (
-                <span
-                  key={i}
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[11px]",
-                    chipClass(a.status),
-                  )}
-                >
-                  <StatusGlyph status={a.status} />
-                  {a.id}
-                </span>
-              ))
-            : Array.from({ length: total }).map((_, i) => (
-                <span
-                  key={i}
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[11px]",
-                    chipClass(i < completed ? "ok" : "running"),
-                  )}
-                >
-                  {i < completed ? (
-                    <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} />
-                  ) : (
-                    <Loader2 className="h-3 w-3 shrink-0 animate-spin" strokeWidth={2} />
-                  )}
-                  {`agent-${i + 1}`}
-                </span>
-              ))}
-        </div>
-      )}
-      {running && total === 0 && planning && (
-        <div className="flex flex-wrap gap-1.5 px-3 py-2">
-          <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[11px]", chipClass("planning"))}>
-            <Loader2 className="h-3 w-3 shrink-0 animate-spin" strokeWidth={2} />
-            planning subtasks…
-          </span>
-        </div>
-      )}
-
-      {/* expandable detail */}
-      {open && hasDetail && (
-        <div className="border-t border-border/60 px-3 py-2">
+      {/* agents: circle + id + turns + status */}
+      {slots.length > 0 && (
+        <div className="mt-0.5">
           {done && done.goal !== "" && (
-            <div className="mb-2 text-[12px] text-muted-foreground">
-              <span className="text-foreground/80">Goal:</span> {done.goal}
+            <div className="flex items-center gap-2 py-0.5 pl-[18px] font-mono text-[12.5px]">
+              <span className="text-muted-foreground/80">Goal:</span>
+              <span className="min-w-0 truncate text-muted-foreground" title={done.goal}>
+                {done.goal}
+              </span>
             </div>
           )}
-          {done && done.agents.length > 0 ? (
-            <div className="space-y-2">
-              {done.agents.map((a, i) => (
-                <div key={i} className="rounded-md border border-border/60 bg-background/40">
-                  <div className="flex items-center gap-2 px-2.5 py-1.5">
-                    <StatusGlyph status={a.status} />
-                    <span className="font-mono text-[12px] font-medium text-foreground">{a.id}</span>
-                    <span className="font-mono text-[11px] text-muted-foreground">{a.turns}</span>
-                    {a.worktree && (
-                      <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/80" title={a.worktree}>
-                        {a.worktree}
-                      </span>
-                    )}
-                  </div>
-                  {a.body !== "" && (
-                    <pre
-                      className={cn(
-                        "overflow-x-auto whitespace-pre-wrap border-t border-border/40 px-2.5 py-1.5 font-mono text-[12px] leading-relaxed",
-                        a.status === "error" ? "text-danger/90" : "text-muted-foreground",
-                      )}
-                    >
-                      {a.body}
-                    </pre>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[12px] leading-relaxed text-muted-foreground">
-              {output}
-            </pre>
-          )}
+          {slots.map((s, i) => (
+            <AgentRow key={i} index={i} {...s} />
+          ))}
         </div>
       )}
     </div>
