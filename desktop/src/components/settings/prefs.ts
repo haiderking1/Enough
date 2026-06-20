@@ -7,7 +7,6 @@ export interface HollowPrefs {
   diffWrap: boolean
   hideWhitespace: boolean
   assistantOutput: boolean
-  autoOpenTaskPanel: boolean
   newThreadLocation: "local"
 }
 
@@ -17,8 +16,7 @@ export const DEFAULT_PREFS: HollowPrefs = {
   timeFormat: "system",
   diffWrap: false,
   hideWhitespace: true,
-  assistantOutput: false,
-  autoOpenTaskPanel: true,
+  assistantOutput: true,
   newThreadLocation: "local",
 }
 
@@ -28,7 +26,11 @@ export function loadPrefs(): HollowPrefs {
   try {
     const v = localStorage.getItem(KEY)
     if (!v) return DEFAULT_PREFS
-    return { ...DEFAULT_PREFS, ...(JSON.parse(v) as Partial<HollowPrefs>) }
+    const parsed = JSON.parse(v) as Partial<HollowPrefs>
+    if (parsed.assistantOutput === false || parsed.assistantOutput === undefined) {
+      parsed.assistantOutput = true
+    }
+    return { ...DEFAULT_PREFS, ...parsed }
   } catch {
     return DEFAULT_PREFS
   }

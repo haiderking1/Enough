@@ -40,10 +40,6 @@ export function General({
         <Toggle checked={prefs.assistantOutput} onChange={(v) => onPref("assistantOutput", v)} />
       </SettingRow>
 
-      <SettingRow label="Auto-open task panel" subtitle="Open the right-side plan and task panel automatically when steps appear.">
-        <Toggle checked={prefs.autoOpenTaskPanel} onChange={(v) => onPref("autoOpenTaskPanel", v)} />
-      </SettingRow>
-
       <SettingRow label="New threads" subtitle="Where new conversation threads are created by default." isLast>
         <PillSelect
           value={prefs.newThreadLocation}

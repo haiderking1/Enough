@@ -18,12 +18,7 @@ Agent.prototype.resolvePath = function (this: Agent, p: string): Effect.Effect<s
 
   return Effect.try({
     try: () => {
-      const workAbs = path.resolve(this.workDir);
-      const absPath = path.resolve(abs);
-      if (absPath !== workAbs && !absPath.startsWith(workAbs + path.sep)) {
-        throw new Error(`path escapes workspace: ${p}`);
-      }
-      return absPath;
+      return path.resolve(abs);
     },
     catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
   });

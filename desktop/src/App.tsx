@@ -3,7 +3,6 @@ import { PanelLeft } from "lucide-react"
 import { TrafficLights } from "./components/TrafficLights"
 import { Sidebar } from "./components/sidebar"
 import { ChatWorkspace } from "./components/chat-workspace"
-import TaskSidebar from "./components/TaskSidebar"
 import TerminalPanel from "./components/TerminalPanel"
 import SettingsPage from "./components/settings"
 import { SearchModal } from "./components/SearchModal"
@@ -75,7 +74,6 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [terminalOpen] = useState(false)
-  const [taskSidebarOpen, setTaskSidebarOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -256,10 +254,6 @@ export default function App() {
             const p = prefsRef.current
             // Live token-by-token output is gated by the Assistant output pref.
             if (p.assistantOutput) applyAssistantContent(blocks)
-            // Auto-open the task panel when the first tool/step appears.
-            if (p.autoOpenTaskPanel && blocks.some((b) => b.type === "tool")) {
-              setTaskSidebarOpen(true)
-            }
           }
           break
         }
@@ -705,7 +699,6 @@ export default function App() {
           />
           <TerminalPanel open={terminalOpen} />
         </div>
-        <TaskSidebar open={taskSidebarOpen} onClose={() => setTaskSidebarOpen(false)} />
       </main>
 
       <SettingsPage

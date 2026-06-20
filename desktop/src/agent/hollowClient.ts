@@ -115,10 +115,10 @@ function toolVerb(name?: string): ToolVerb {
   const lower = (name ?? "tool").toLowerCase()
   if (lower.includes("write")) return "Write"
   if (lower.includes("edit") || lower.includes("patch")) return "Edit"
-  if (lower.includes("read") || lower.includes("file")) return "Read"
+  if (lower.includes("read") || lower.includes("file") || lower.includes("dir") || lower.includes("glob")) return "Read"
   if (lower.includes("grep")) return "Grep"
-  if (lower.includes("search") || lower.includes("find")) return "Search"
-  if (lower.includes("task") || lower.includes("agent")) return "Task"
+  if (lower.includes("search") || lower.includes("find") || lower.includes("browser")) return "Search"
+  if (lower.includes("task") || lower.includes("agent") || lower.includes("skill") || lower.includes("memory")) return "Task"
   if (lower.includes("fetch")) return "Fetch"
   return "Bash"
 }
@@ -133,6 +133,7 @@ function toolTitle(tool: BackendHistoryTool | (BackendMessage & { type: "tool" }
       args.TargetFile ||
       args.path ||
       args.filename ||
+      args.pattern ||
       tool.name
     )
   } catch {
@@ -490,7 +491,7 @@ class HollowClient {
         if (message.name) {
           this.toolMetaMap.set(id, {
             name: message.name,
-            arguments: message.arguments ?? this.toolMetaMap.get(id)?.arguments ?? "",
+            arguments: message.arguments || this.toolMetaMap.get(id)?.arguments || "",
           })
         }
         const meta = this.toolMetaMap.get(id)
@@ -503,9 +504,9 @@ class HollowClient {
             type: "tool",
             id,
             name: message.name || meta?.name || "tool",
-            arguments: message.arguments ?? meta?.arguments ?? "",
+            arguments: message.arguments || meta?.arguments || "",
             status: message.status ?? "running",
-            result: message.result ?? prevOutput,
+            result: message.result || prevOutput,
           }),
         )
         this.emitAssistantUpdate()
