@@ -483,7 +483,8 @@ export function summarizeReviewActions(reviewMessages: message[]): string[] {
     } catch {
       continue;
     }
-    if (!data.success) {
+    // JSON.parse can yield null — guard before reading .success/.staged.
+    if (!data || !data.success) {
       continue;
     }
     if (data.staged) {

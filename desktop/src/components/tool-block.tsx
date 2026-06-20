@@ -23,6 +23,15 @@ export function ToolBlock({ block }: { block: ToolBlockType }) {
   const [open, setOpen] = useState(false)
   const isFileTool = block.tool === "Write" || block.tool === "Edit" || block.tool === "Read"
   const label = isFileTool ? displayPath(block.title) : truncate(block.title)
+  // Browser tool: no status icon — the verb text itself carries the status color.
+  const isBrowser = block.tool === "Browser"
+  const verbCls = !isBrowser
+    ? "text-foreground"
+    : block.status === "error"
+      ? "text-danger"
+      : block.status === "running"
+        ? "text-info"
+        : "text-success"
 
   return (
     <div className="min-w-0">
@@ -36,11 +45,13 @@ export function ToolBlock({ block }: { block: ToolBlockType }) {
           !hasBody && "cursor-default",
         )}
       >
-        <span className="shrink-0 text-[13px] font-medium text-foreground">{block.tool}</span>
+        <span className={cn("shrink-0 text-[13px] font-medium", verbCls)}>{block.tool}</span>
 
-        <span className="max-w-[min(100%,28rem)] truncate font-mono text-[13px] text-muted-foreground" title={block.title}>
-          {label}
-        </span>
+        {label && (
+          <span className="max-w-[min(100%,28rem)] truncate font-mono text-[13px] text-muted-foreground" title={block.title}>
+            {label}
+          </span>
+        )}
 
         {block.meta && (
           <span className="shrink-0 flex gap-1 font-mono text-[13px] tabular-nums">
@@ -56,7 +67,7 @@ export function ToolBlock({ block }: { block: ToolBlockType }) {
           </span>
         )}
 
-        <StatusIcon status={block.status} />
+        {!isBrowser && <StatusIcon status={block.status} />}
 
         {hasBody && (
           <ChevronRight

@@ -12,30 +12,15 @@ import { threatPatternIDs, ScanScope } from "./scan";
 
 export const soulMaxChars = 24000;
 
-// DefaultSoul is seeded on first run when ~/.hollow/SOUL.md is missing. It is
-// user-editable; edits take effect on the next session.
-export const DefaultSoul = `# SOUL.md — agent identity
-
-This file is your primary identity. Edit it to change your display name,
-persona, and tone. Changes take effect on the next session (/new).
-
-Replace "Enough" below with any name you prefer (e.g. smoke).
-
----
-
-You are Enough, a coding agent optimized for fast, precise execution.
-You are helpful, knowledgeable, and direct. You assist with writing and
-editing code, analyzing repositories, answering questions, and executing
-actions via your tools. You communicate clearly, admit uncertainty when
-appropriate, and prioritize being genuinely useful over being verbose.
-Be targeted and efficient in your exploration and investigations.
-`;
-
+// On fresh install SOUL.md is created empty — identity is opt-in. While it's
+// empty, LoadSoul returns "" and the caller falls back to the built-in
+// default persona (see agent/prompt.ts). The user edits this file to set a
+// custom name/persona; edits take effect on the next session (/new).
 export function SoulPath(): string {
   return path.join(home_dir(), "SOUL.md");
 }
 
-// EnsureSoul seeds the default SOUL.md if missing. Best-effort.
+// EnsureSoul creates an empty SOUL.md if missing. Best-effort.
 export function EnsureSoul(): void {
   const p = SoulPath();
   try {
@@ -53,7 +38,7 @@ export function EnsureSoul(): void {
   }
 
   try {
-    fs.writeFileSync(p, DefaultSoul, { mode: 0o600 });
+    fs.writeFileSync(p, "", { mode: 0o600 });
   } catch {
     // ignore
   }

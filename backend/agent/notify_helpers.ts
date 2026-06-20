@@ -18,7 +18,8 @@ export function notifyStagedWrite(this: Agent, toolOutput: string): void {
   } catch (err) {
     return;
   }
-  if (!data.staged) {
+  // JSON.parse("null") / a non-object yields null — guard before reading .staged.
+  if (!data || !data.staged) {
     return;
   }
 
@@ -68,7 +69,8 @@ export function notifyDirectMemoryWrite(this: Agent, argsJSON: string, toolOutpu
   } catch (err) {
     return;
   }
-  if (!result.success || result.staged) {
+  // JSON.parse can yield null — guard before reading .success/.staged.
+  if (!result || !result.success || result.staged) {
     return;
   }
 

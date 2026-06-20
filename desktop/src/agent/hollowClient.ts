@@ -121,7 +121,8 @@ function toolVerb(name?: string): ToolVerb {
   if (lower.includes("glob")) return "Glob"
   if (lower.includes("grep")) return "Grep"
   if (lower === "web_search" || lower.includes("web_search")) return "Web Search"
-  if (lower.includes("search") || lower.includes("find") || lower.includes("browser")) return "Search"
+  if (lower.includes("browser")) return "Browser"
+  if (lower.includes("search") || lower.includes("find")) return "Search"
   if (lower.includes("swarm")) return "Swarm Agent"
   if (lower.includes("task") || lower.includes("agent") || lower.includes("skill") || lower.includes("memory")) return "Task"
   if (lower.includes("fetch")) return "Fetch"
@@ -131,6 +132,8 @@ function toolVerb(name?: string): ToolVerb {
 function toolTitle(tool: BackendHistoryTool | (BackendMessage & { type: "tool" })) {
   try {
     const args = JSON.parse(tool.arguments || "{}")
+    const nm = (tool.name || "").toLowerCase()
+    if (nm.includes("browser")) return ""
     return (
       args.CommandLine ||
       args.command ||
