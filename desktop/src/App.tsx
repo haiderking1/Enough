@@ -7,7 +7,7 @@ import TerminalPanel from "./components/TerminalPanel"
 import SettingsPage from "./components/settings"
 import { SearchModal } from "./components/SearchModal"
 import { DirectoryPicker } from "./components/DirectoryPicker"
-import type { Message, Block } from "./types"
+import type { Message, Block, RepoStatus } from "./types"
 import { hollowAgent } from "./agent/hollowClient"
 import {
   type AgentEvent,
@@ -95,6 +95,8 @@ export default function App() {
   )
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [projectCwd, setProjectCwd] = useState<string | null>(null)
+  // Composer status bar: git changes + branch + context-window fill for the cwd.
+  const [repoStatus, setRepoStatus] = useState<RepoStatus | null>(null)
   const [addedProjects, setAddedProjects] = useState<string[]>(() =>
     loadJSON<string[]>("hollow-projects", []),
   )
@@ -215,6 +217,18 @@ export default function App() {
     send({ type: "list_sessions" })
   }, [])
 
+  // Poll the composer status bar (git shortstat + branch + context %). Re-fetch
+  // on cwd change, after each turn ends, and on a 20s interval while a session
+  // is active so edits made outside the agent are reflected. Silent on failure
+  // (non-git dirs return 0/0/""), never throws into the chat surface.
+  const refreshRepoStatus = useCallback((cwd: string) => {
+    let cancelled = false
+    void hollowAgent.repoStatus(cwd).then((status) => {
+      if (!cancelled && status) setRepoStatus(status)
+    })
+    return () => { cancelled = true }
+  }, [])
+
   // Refresh sidebar when projects are added/removed (not on every thread switch).
   useEffect(() => {
     refreshSessionList()
@@ -275,6 +289,9 @@ export default function App() {
             lastBlocksRef.current = []
             setIsStreaming(false)
             refreshSessionList()
+            // A completed turn changes the working tree + context fill — refresh the status bar.
+            const cwd = projectCwdRef.current
+            if (cwd && cwd !== "~") refreshRepoStatusRef.current(cwd)
           }
           break
         }
@@ -624,6 +641,17 @@ export default function App() {
   const current = sessionList.find((s) => s.id === currentSessionId)
   const currentCwd = current?.cwd ?? projectCwd ?? "~"
 
+  // Composer status-bar polling: fetch on cwd change, refresh after each turn,
+  // and tick every 20s while a real project is open. Skip the "~" placeholder.
+  useEffect(() => {
+    if (currentCwd === "~") return
+    const stop = refreshRepoStatus(currentCwd)
+    const interval = window.setInterval(() => refreshRepoStatus(currentCwd), 20000)
+    return () => { stop(); window.clearInterval(interval) }
+  }, [currentCwd, refreshRepoStatus])
+  const refreshRepoStatusRef = useRef(refreshRepoStatus)
+  refreshRepoStatusRef.current = refreshRepoStatus
+
   const projects = useMemo(() => {
     const set = new Set<string>(addedProjects)
     for (const session of sessionList) set.add(session.cwd)
@@ -692,6 +720,7 @@ export default function App() {
             modelCatalog={modelCatalog}
             isStreaming={isStreaming}
             syncingThread={syncingThread}
+            repoStatus={repoStatus}
             onSend={handleSend}
             onAbort={handleAbort}
             onSelectModel={handleSelectModel}

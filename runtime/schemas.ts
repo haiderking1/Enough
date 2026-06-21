@@ -101,6 +101,14 @@ export const CancelCodexLogin = Schema.Struct({
 });
 export type CancelCodexLogin = Schema.Schema.Type<typeof CancelCodexLogin>;
 
+// Composer status bar: git diff shortstat + current branch for the session's
+// cwd. Optional cwd falls back to the runtime's workDir. Pure local git calls.
+export const RepoStatus = Schema.Struct({
+  type: Schema.Literal("repoStatus"),
+  cwd: Schema.optional(Schema.String),
+});
+export type RepoStatus = Schema.Schema.Type<typeof RepoStatus>;
+
 export const DesktopCommand = Schema.Union(
   ListSessions,
   OpenSession,
@@ -114,7 +122,8 @@ export const DesktopCommand = Schema.Union(
   SetApiKey,
   RemoveKey,
   StartCodexLogin,
-  CancelCodexLogin
+  CancelCodexLogin,
+  RepoStatus,
 );
 export type DesktopCommand = Schema.Schema.Type<typeof DesktopCommand>;
 

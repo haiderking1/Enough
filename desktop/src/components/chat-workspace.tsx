@@ -1,5 +1,5 @@
 import { memo } from "react"
-import type { Message } from "../types"
+import type { Message, RepoStatus } from "../types"
 import type { ModelCatalog } from "../agent/rpc"
 import { ChatView } from "./chat-view"
 import { EmptyState } from "./empty-state"
@@ -14,6 +14,7 @@ interface ChatWorkspaceProps {
   modelCatalog: ModelCatalog | null
   isStreaming: boolean
   syncingThread: boolean
+  repoStatus: RepoStatus | null
   onSend: (text: string) => void
   onAbort: () => void
   onSelectModel: (provider: string, modelId: string, thinkingLevel: string) => void
@@ -24,10 +25,10 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   loadingThread,
   messages,
   sessionId,
-  currentCwd,
   modelCatalog,
   isStreaming,
   syncingThread,
+  repoStatus,
   onSend,
   onAbort,
   onSelectModel,
@@ -37,16 +38,20 @@ export const ChatWorkspace = memo(function ChatWorkspace({
   const streaming = isStreaming || syncingThread
 
   const composer = (
-    <div className="w-full space-y-1.5">
-      <PromptInput onSend={onSend} isStreaming={isStreaming} onAbort={onAbort} />
-      <ModelPicker
-        catalog={modelCatalog}
-        disabled={isStreaming}
-        isStreaming={streaming}
-        onSelect={onSelectModel}
-        onRefreshCatalog={onRefreshCatalog}
-      />
-    </div>
+    <PromptInput
+      onSend={onSend}
+      isStreaming={isStreaming}
+      onAbort={onAbort}
+      repoStatus={repoStatus}
+      footer={
+        <ModelPicker
+          catalog={modelCatalog}
+          disabled={isStreaming}
+          onSelect={onSelectModel}
+          onRefreshCatalog={onRefreshCatalog}
+        />
+      }
+    />
   )
 
   return (
@@ -56,12 +61,14 @@ export const ChatWorkspace = memo(function ChatWorkspace({
           <span className="block h-5 w-5 rounded-full border-2 border-muted-foreground/30 border-t-foreground animate-spin [animation-duration:0.9s]" />
         </div>
       ) : showEmpty ? (
-        <EmptyState cwd={currentCwd} composer={composer} />
+        <EmptyState composer={composer} />
       ) : (
         <>
-          <ChatView messages={messages} sessionId={sessionId} isStreaming={streaming} />
+          <div className="mx-auto min-h-0 w-full max-w-[720px] flex-1">
+            <ChatView messages={messages} sessionId={sessionId} isStreaming={streaming} />
+          </div>
           <div className="absolute bottom-0 left-0 right-0 pointer-events-none bg-gradient-to-t from-background via-background/95 to-transparent pt-10 pb-4">
-            <div className="w-full px-6 pointer-events-auto">{composer}</div>
+            <div className="mx-auto w-full max-w-[720px] px-6 pointer-events-auto">{composer}</div>
           </div>
         </>
       )}

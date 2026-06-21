@@ -16,6 +16,7 @@ export type BackendMessage =
   | { type: "connection.changed"; connections: unknown[]; catalog: unknown; error?: string }
   | { type: "codex.login.start"; user_code: string; verify_url: string; poll_interval: number }
   | { type: "codex.login.cancelled" }
+  | { type: "repoStatus"; added: number; removed: number; branch: string; contextPct: number }
   | { type: "token"; text?: string }
   | { type: "thinking"; text?: string }
   | {
@@ -184,6 +185,15 @@ export const mapDispatchResponse = (
 
     case "codex.login.cancelled":
       return { type: "codex.login.cancelled" };
+
+    case "repoStatus":
+      return {
+        type: "repoStatus",
+        added: response.added,
+        removed: response.removed,
+        branch: response.branch,
+        contextPct: response.contextPct,
+      };
 
     case "deleteSession.success":
     case "setModel.success":

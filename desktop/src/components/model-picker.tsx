@@ -1,175 +1,79 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Lock, Search, Star } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Check, ChevronDown, Plus, Search } from "lucide-react"
 import type { AgentModel, ModelCatalog } from "../agent/rpc"
-import {
-  isOpenCodeProvider,
-  ProviderBrandIcon,
-  providerToSidebarTab,
-  type SidebarTab,
-} from "./provider-icons"
-import { PickerButton } from "./picker-button"
-import { ThinkingPicker } from "./thinking-picker"
-import {
-  formatThinkingBadge,
-} from "../lib/thinking"
-import { cn } from "../lib/utils"
-
-const FAVORITES_KEY = "enough-favorite-models"
+import { formatThinkingBadge, formatThinkingLevelForModel } from "../lib/thinking"
 
 interface ModelPickerProps {
   catalog: ModelCatalog | null
   disabled?: boolean
-  isStreaming?: boolean
   onSelect: (provider: string, modelId: string, thinkingLevel: string) => void
-  // Re-fetch the catalog when the dropdown opens so a provider key added/removed
-  // since launch (e.g. via the Enough CLI) is reflected without a Settings trip.
-  // Uses get_model_catalog (local: re-reads the keyring, no provider network call).
   onRefreshCatalog?: () => void
 }
 
-function loadFavorites(): Set<string> {
-  try {
-    const raw = localStorage.getItem(FAVORITES_KEY)
-    return new Set(raw ? (JSON.parse(raw) as string[]) : [])
-  } catch {
-    return new Set()
+// Cursor-style model picker: compact popover with search, toggles, active model
+// row with a checkmark, and an "Add Models" row.
+const C = {
+  muted: "#6e6e78",
+  panelBg: "#1c1c1e",
+  panelBorder: "rgba(255,255,255,0.08)",
+  hoverBg: "rgba(255,255,255,0.05)",
+  toggleBg: "#2a2a2d",
+  toggleKnob: "#ffffff",
+}
+
+function speedLabel(model: AgentModel, level: string): string {
+  const badge = formatThinkingBadge(model, level)
+  const tiers: Record<string, string> = {
+    off: "Fast",
+    minimal: "Fast",
+    low: "Fast",
+    medium: "Balanced",
+    high: "Slow",
+    xhigh: "Slow",
+    max: "Slow",
   }
+  return tiers[badge.toLowerCase()] ?? "Fast"
 }
 
-function saveFavorites(favs: Set<string>) {
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favs]))
+function labelFor(model: AgentModel, level: string): string {
+  return `${model.name} ${speedLabel(model, level)}`
 }
 
-function providerShortName(id: string) {
-  if (id === "openai-codex") return "Codex"
-  if (id === "opencode-zen") return "Zen"
-  if (id === "opencode-go") return "Go"
-  if (id === "neuralwatt") return "NeuralWatt"
-  return id
-}
-
-function defaultThinking(model: AgentModel) {
-  const levels = model.thinkingLevels ?? []
-  if (levels.length <= 1) return ""
-  if (levels.includes("medium")) return "medium"
-  return levels.find((l) => l !== "off") ?? levels[0]
-}
-
-function modelBadgeThinking(
-  model: AgentModel,
-  isActive: boolean,
-  isHighlight: boolean,
-  pickerThinking: string,
-  catalogThinking: string,
-): string {
-  const levels = model.thinkingLevels ?? []
-  if (levels.length > 1) {
-    if (isHighlight || isActive) return pickerThinking || defaultThinking(model)
-    if (catalogThinking && levels.includes(catalogThinking)) return catalogThinking
-    return defaultThinking(model)
-  }
-  return levels[0] ?? ""
-}
-
-function modelMatchesTab(model: AgentModel, tab: SidebarTab) {
-  if (tab === "favorites") return false
-  if (tab === "opencode") return isOpenCodeProvider(model.provider)
-  return model.provider === tab
-}
-
-export function ModelPicker({ catalog, disabled, isStreaming, onSelect, onRefreshCatalog }: ModelPickerProps) {
+export function ModelPicker({ catalog, disabled, onSelect, onRefreshCatalog }: ModelPickerProps) {
   const state = catalog?.state
-  const [open, setOpen] = useState(false)
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(
-    state?.provider ? providerToSidebarTab(state.provider) : "opencode",
-  )
-  const [query, setQuery] = useState("")
-  const [highlight, setHighlight] = useState(0)
-  const [thinking, setThinking] = useState(state?.thinkingLevel ?? "")
-  const [favorites, setFavorites] = useState<Set<string>>(loadFavorites)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const searchRef = useRef<HTMLInputElement>(null)
-
   const providers = catalog?.providers ?? []
   const models = catalog?.models ?? []
 
-  useEffect(() => {
-    if (!state?.provider) return
-    setSidebarTab(providerToSidebarTab(state.provider))
-    setThinking(state.thinkingLevel)
-  }, [state?.provider, state?.thinkingLevel])
-
-  const opencodeConnected = useMemo(
-    () => providers.some((p) => isOpenCodeProvider(p.id) && p.connected),
-    [providers],
-  )
-  const codexConnected = useMemo(
-    () => providers.some((p) => p.id === "openai-codex" && p.connected),
-    [providers],
-  )
-  const neuralwattConnected = useMemo(
-    () => providers.some((p) => p.id === "neuralwatt" && p.connected),
-    [providers],
-  )
-
-  const listModels = useMemo(() => {
-    let items: AgentModel[]
-    if (sidebarTab === "favorites") {
-      items = models.filter((m) => favorites.has(m.id))
-    } else {
-      items = models.filter((m) => modelMatchesTab(m, sidebarTab))
-    }
-    const q = query.trim().toLowerCase()
-    if (q) {
-      items = items.filter(
-        (m) =>
-          m.name.toLowerCase().includes(q) ||
-          m.id.toLowerCase().includes(q) ||
-          providerShortName(m.provider).toLowerCase().includes(q),
-      )
-    }
-    return items
-  }, [sidebarTab, models, favorites, query])
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [auto, setAuto] = useState(false)
+  const [maxMode, setMaxMode] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const activeModel = useMemo(
     () => models.find((m) => m.id === state?.modelId && m.provider === state?.provider),
     [models, state?.modelId, state?.provider],
   )
 
-  const thinkingLevels = activeModel?.thinkingLevels ?? []
+  const activeLabel = useMemo(() => {
+    if (!activeModel) return state?.modelName ?? "Model"
+    return labelFor(activeModel, state?.thinkingLevel ?? "")
+  }, [activeModel, state?.modelName, state?.thinkingLevel])
 
-  const apply = useCallback(
-    (model: AgentModel, nextThinking?: string) => {
-      const p = providers.find((item) => item.id === model.provider)
-      if (p && !p.connected) return
-      const level = nextThinking ?? defaultThinking(model)
-      setThinking(level)
-      onSelect(model.provider, model.id, level)
-      setOpen(false)
-      setQuery("")
-    },
-    [onSelect, providers],
-  )
-
-  const toggleFavorite = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setFavorites((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      saveFavorites(next)
-      return next
-    })
-  }
-
-  useEffect(() => {
-    setHighlight(0)
-  }, [sidebarTab, query])
+  const filteredModels = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return models
+    return models.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.id.toLowerCase().includes(q) ||
+        m.provider.toLowerCase().includes(q),
+    )
+  }, [models, query])
 
   useEffect(() => {
     if (!open) return
-    // Refresh connectivity flags the moment the picker opens — cheap, local
-    // (get_model_catalog re-reads the keyring; no provider network round-trip).
     onRefreshCatalog?.()
     const t = window.setTimeout(() => searchRef.current?.focus(), 30)
     return () => window.clearTimeout(t)
@@ -180,265 +84,190 @@ export function ModelPicker({ catalog, disabled, isStreaming, onSelect, onRefres
     const onDoc = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false)
+    }
     document.addEventListener("mousedown", onDoc)
-    return () => document.removeEventListener("mousedown", onDoc)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", onDoc)
+      document.removeEventListener("keydown", onKey)
+    }
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false)
-        return
-      }
-      if (e.ctrlKey || e.metaKey) {
-        const num = parseInt(e.key, 10)
-        if (num >= 1 && num <= 9 && listModels[num - 1]) {
-          e.preventDefault()
-          apply(listModels[num - 1])
-        }
-        return
-      }
-      if (e.key === "ArrowDown") {
-        e.preventDefault()
-        setHighlight((i) => Math.min(i + 1, Math.max(listModels.length - 1, 0)))
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault()
-        setHighlight((i) => Math.max(i - 1, 0))
-      } else if (e.key === "Enter" && listModels[highlight]) {
-        e.preventDefault()
-        apply(listModels[highlight])
-      }
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [open, listModels, highlight, apply])
+  const select = (model: AgentModel) => {
+    const level = model.thinkingLevels?.length
+      ? maxMode
+        ? "max"
+        : model.thinkingLevels.includes("medium")
+          ? "medium"
+          : model.thinkingLevels.find((l) => l !== "off") ?? model.thinkingLevels[0]
+      : ""
+    onSelect(model.provider, model.id, level)
+    setOpen(false)
+    setQuery("")
+  }
 
+  // Loading fallback: plain trigger text.
   if (!catalog || providers.length === 0) {
     return (
-      <div className="flex items-center py-1 text-[12px] text-muted-foreground">
-        Loading models…
-      </div>
+      <button
+        type="button"
+        disabled
+        className="inline-flex items-center gap-1 text-[13px] font-medium leading-none"
+        style={{ color: C.muted }}
+      >
+        <span>Model Fast</span>
+        <ChevronDown size={12} strokeWidth={2} style={{ color: C.muted }} />
+      </button>
     )
   }
 
-  const triggerLabel = state?.modelName ?? "Model"
-  const triggerBrand = state?.provider ? providerToSidebarTab(state.provider) : "opencode"
-
   return (
-    <div className="flex items-center gap-2 py-1">
-      <div ref={rootRef} className="relative shrink-0">
-        <PickerButton
-          icon={<ProviderBrandIcon id={triggerBrand} className="h-3.5 w-3.5" />}
-          label={triggerLabel}
-          open={open}
-          disabled={disabled}
-          onClick={() => setOpen((o) => !o)}
+    <div ref={rootRef} className="relative shrink-0">
+      {/* Inline trigger. */}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1 text-[13px] font-medium leading-none transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ color: C.muted }}
+      >
+        <span className="truncate">{activeLabel}</span>
+        <ChevronDown
+          size={12}
+          strokeWidth={2}
+          style={{ color: C.muted }}
+          className={open ? "rotate-180" : ""}
         />
+      </button>
 
-        {open && (
-          <div className="absolute bottom-full left-0 z-50 mb-2 w-[min(100vw-3rem,420px)] overflow-hidden rounded-xl border border-border-strong bg-surface shadow-2xl">
-            <div className="flex h-[360px]">
-              <aside className="flex w-[48px] shrink-0 flex-col items-center gap-1 border-r border-border bg-background py-2">
-                <SidebarBtn
-                  active={sidebarTab === "favorites"}
-                  onClick={() => setSidebarTab("favorites")}
-                  title="Favorites"
-                >
-                  <Star className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
-                </SidebarBtn>
-                <div className="my-1 h-px w-5 bg-border" />
-                <SidebarBtn
-                  active={sidebarTab === "opencode"}
-                  onClick={() => setSidebarTab("opencode")}
-                  title="OpenCode"
-                  locked={!opencodeConnected}
-                >
-                  <ProviderBrandIcon id="opencode" />
-                </SidebarBtn>
-                <SidebarBtn
-                  active={sidebarTab === "neuralwatt"}
-                  onClick={() => setSidebarTab("neuralwatt")}
-                  title="NeuralWatt"
-                  locked={!neuralwattConnected}
-                >
-                  <ProviderBrandIcon id="neuralwatt" />
-                </SidebarBtn>
-                <SidebarBtn
-                  active={sidebarTab === "openai-codex"}
-                  onClick={() => setSidebarTab("openai-codex")}
-                  title="OpenAI Codex"
-                  locked={!codexConnected}
-                >
-                  <ProviderBrandIcon id="openai-codex" />
-                </SidebarBtn>
-              </aside>
-
-              <div className="flex min-w-0 flex-1 flex-col">
-                <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-                  <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={2} />
-                  <input
-                    ref={searchRef}
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search models..."
-                    className="w-full bg-transparent text-[12px] text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
-                  />
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-y-auto">
-                  {listModels.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-[12px] text-muted-foreground">
-                      {sidebarTab === "favorites"
-                        ? "No favorites yet"
-                        : sidebarTab === "opencode" && !opencodeConnected
-                          ? "Connect OpenCode first"
-                          : sidebarTab === "neuralwatt" && !neuralwattConnected
-                            ? "Connect NeuralWatt first"
-                            : sidebarTab === "openai-codex" && !codexConnected
-                              ? "Connect Codex first"
-                              : "No models found"}
-                    </div>
-                  ) : (
-                    listModels.map((model, index) => {
-                      const provider = providers.find((p) => p.id === model.provider)
-                      const isActive = model.id === state?.modelId && model.provider === state?.provider
-                      const isHighlight = index === highlight
-                      const shortcut = index < 9 ? `Ctrl+${index + 1}` : null
-                      const badge = formatThinkingBadge(
-                        model,
-                        modelBadgeThinking(
-                          model,
-                          isActive,
-                          isHighlight,
-                          thinking,
-                          state?.thinkingLevel ?? "",
-                        ),
-                      )
-
-                      return (
-                        <div
-                          key={`${model.provider}:${model.id}`}
-                          role="button"
-                          tabIndex={0}
-                          onMouseEnter={() => setHighlight(index)}
-                          onClick={() => provider?.connected !== false && apply(model)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault()
-                              if (provider?.connected !== false) apply(model)
-                            }
-                          }}
-                          className={cn(
-                            "flex w-full cursor-pointer items-center gap-2 border-b border-border/40 px-3 py-2 text-left transition-colors",
-                            "hover:bg-surface-hover/80",
-                            provider && !provider.connected && "cursor-not-allowed opacity-40",
-                            (isActive || isHighlight) && "bg-surface-hover/60",
-                          )}
-                        >
-                          <button
-                            type="button"
-                            onClick={(e) => toggleFavorite(model.id, e)}
-                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-                            aria-label={favorites.has(model.id) ? "Remove favorite" : "Add favorite"}
-                          >
-                            <Star
-                              className={cn(
-                                "h-3 w-3",
-                                favorites.has(model.id) ? "fill-amber-400 text-amber-400" : "",
-                              )}
-                              strokeWidth={1.75}
-                            />
-                          </button>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[13px] font-medium text-foreground">{model.name}</div>
-                            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-                              <ProviderBrandIcon id={model.provider} className="h-3 w-3" />
-                              <span>{providerShortName(model.provider)}</span>
-                              {model.contextLabel && (
-                                <>
-                                  <span>·</span>
-                                  <span>{model.contextLabel}</span>
-                                </>
-                              )}
-                              {badge && (
-                                <>
-                                  <span>·</span>
-                                  <span>{badge}</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-
-                          {shortcut && (
-                            <kbd className="hidden shrink-0 rounded border border-border-strong bg-surface px-1 py-0.5 font-mono text-[9px] text-muted-foreground sm:inline">
-                              {shortcut}
-                            </kbd>
-                          )}
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
+      {open && (
+        <div
+          className="absolute bottom-full right-0 z-50 mb-2 w-[260px] overflow-hidden rounded-xl p-2 shadow-2xl"
+          style={{ background: C.panelBg, border: `1px solid ${C.panelBorder}` }}
+        >
+          {/* Search models. */}
+          <div className="flex items-center gap-2 px-2 py-2">
+            <Search size={14} strokeWidth={2} style={{ color: C.muted }} />
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search models"
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+            />
           </div>
-        )}
-      </div>
 
-      {activeModel && (
-        <ThinkingPicker
-          model={activeModel}
-          levels={thinkingLevels}
-          value={thinking}
-          disabled={disabled}
-          onChange={(level) => {
-            setThinking(level)
-            onSelect(activeModel.provider, activeModel.id, level)
-          }}
-        />
-      )}
+          {/* Auto toggle. */}
+          <Row
+            label="Auto"
+            right={
+              <Toggle
+                checked={auto}
+                onChange={() => setAuto((v) => !v)}
+              />
+            }
+          />
 
-      {isStreaming && (
-        <span className="ml-auto block h-3.5 w-3.5 shrink-0 rounded-full border-2 border-muted-foreground/30 border-t-foreground animate-spin [animation-duration:1.2s]" />
+          {/* MAX Mode toggle. */}
+          <Row
+            label="MAX Mode"
+            right={
+              <Toggle
+                checked={maxMode}
+                onChange={() => {
+                  setMaxMode((v) => !v)
+                }}
+              />
+            }
+          />
+
+          <div className="my-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+
+          {/* Active / selectable model rows. */}
+          {filteredModels.slice(0, 6).map((model) => {
+            const isActive = model.id === state?.modelId && model.provider === state?.provider
+            return (
+              <button
+                key={`${model.provider}:${model.id}`}
+                type="button"
+                onClick={() => select(model)}
+                className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-[13px] transition-colors"
+                style={{ color: isActive ? C.muted : "#b8b8be" }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = C.hoverBg
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "transparent"
+                }}
+              >
+                <span className="font-medium">{labelFor(model, state?.thinkingLevel ?? "")}</span>
+                {isActive ? (
+                  <span className="flex items-center gap-1 text-[11px]" style={{ color: C.muted }}>
+                    Edit
+                    <Check size={12} strokeWidth={2.5} style={{ color: C.muted }} />
+                  </span>
+                ) : null}
+              </button>
+            )
+          })}
+
+          {filteredModels.length === 0 && (
+            <div className="px-2 py-3 text-[12px]" style={{ color: C.muted }}>
+              No models found
+            </div>
+          )}
+
+          <div className="my-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
+
+          {/* Add Models row. */}
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[13px] transition-colors"
+            style={{ color: "#b8b8be" }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = C.hoverBg
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = "transparent"
+            }}
+          >
+            <Plus size={14} strokeWidth={2} style={{ color: C.muted }} />
+            <span className="font-medium">Add Models</span>
+          </button>
+        </div>
       )}
     </div>
   )
 }
 
-function SidebarBtn({
-  active,
-  onClick,
-  title,
-  locked,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  title: string
-  locked?: boolean
-  children: React.ReactNode
-}) {
+function Row({ label, right }: { label: string; right: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between px-2 py-2">
+      <span className="text-[13px] font-medium" style={{ color: "#b8b8be" }}>{label}</span>
+      {right}
+    </div>
+  )
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      title={title}
-      className={cn(
-        "relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
-        active ? "bg-surface text-foreground" : "text-muted-foreground hover:bg-surface/60 hover:text-foreground",
-      )}
+      onClick={onChange}
+      className="relative h-4 w-7 rounded-full transition-colors"
+      style={{ background: checked ? "#4b4b50" : C.toggleBg }}
+      aria-checked={checked}
+      role="switch"
     >
-      {active && (
-        <span className="absolute right-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full bg-info" />
-      )}
-      <span className={cn(locked && "opacity-50")}>{children}</span>
-      {locked && (
-        <span className="absolute bottom-0 right-0 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-background ring-1 ring-border-strong">
-          <Lock className="h-2 w-2 text-muted-foreground" strokeWidth={2.5} />
-        </span>
-      )}
+      <span
+        className="absolute top-0.5 left-0.5 h-3 w-3 rounded-full transition-transform"
+        style={{
+          background: C.toggleKnob,
+          transform: checked ? "translateX(12px)" : "translateX(0)",
+        }}
+      />
     </button>
   )
 }

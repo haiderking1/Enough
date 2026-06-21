@@ -2,7 +2,7 @@ import { ChevronDown } from "lucide-react"
 import { cn } from "../lib/utils"
 
 interface PickerButtonProps {
-  icon: React.ReactNode
+  icon?: React.ReactNode
   label: string
   open?: boolean
   disabled?: boolean
@@ -10,6 +10,8 @@ interface PickerButtonProps {
   className?: string
 }
 
+// Cursor-style inline trigger: plain muted text + chevron, no pill. Sits inside
+// the composer's input row. The whole control lightens on hover.
 export function PickerButton({ icon, label, open, disabled, onClick, className }: PickerButtonProps) {
   return (
     <button
@@ -17,16 +19,14 @@ export function PickerButton({ icon, label, open, disabled, onClick, className }
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "inline-flex max-w-[220px] items-center gap-1.5 rounded-full border border-border bg-surface/80 px-2.5 py-1 text-left transition-colors",
-        "hover:border-border-strong hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50",
-        open && "border-border-strong bg-surface",
+        "inline-flex max-w-[220px] shrink-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}
     >
-      <span className="shrink-0 text-muted-foreground">{icon}</span>
-      <span className="truncate text-[12px] font-medium text-foreground">{label}</span>
+      {icon && <span className="shrink-0">{icon}</span>}
+      <span className="truncate text-xs font-medium">{label}</span>
       <ChevronDown
-        className={cn("h-3 w-3 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+        className={cn("h-3 w-3 shrink-0 transition-transform", open && "rotate-180")}
         strokeWidth={2}
       />
     </button>

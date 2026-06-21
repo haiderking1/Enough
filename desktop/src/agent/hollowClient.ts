@@ -11,7 +11,7 @@ import type {
   ModelSelectionState,
   RawMessage,
 } from "./rpc"
-import type { ToolVerb, Diff, DiffLine } from "../types"
+import type { ToolVerb, Diff, DiffLine, RepoStatus } from "../types"
 import {
   appendText,
   appendThinking,
@@ -69,6 +69,7 @@ type BackendMessage =
   | { type: "connection.changed"; connections: ConnectionInfo[]; catalog: ModelCatalog; error?: string }
   | { type: "codex.login.start"; user_code: string; verify_url: string; poll_interval: number }
   | { type: "codex.login.cancelled" }
+  | { type: "repoStatus"; added: number; removed: number; branch: string; contextPct: number }
   | { type: "token"; text?: string }
   | { type: "thinking"; text?: string }
   | {
@@ -415,6 +416,24 @@ class HollowClient {
     this.emit({ type: "bridge_ready" })
     this.dispatch({ type: "listSessions" })
     this.dispatch({ type: "listModels" })
+  }
+
+  /**
+   * Composer status bar query: git diff shortstat + branch + context-window fill
+   * for the session cwd. Awaits the IPC round-trip and returns the parsed
+   * result directly (not via the event stream) — the caller polls on a timer.
+   * Returns null when IPC is unavailable or the call fails (non-git dirs, etc).
+   */
+  async repoStatus(cwd: string): Promise<RepoStatus | null> {
+    if (!window.hollowDesktop) return null
+    try {
+      const result = await window.hollowDesktop.dispatch({ type: "repoStatus", cwd })
+      if (!result.ok || result.data === undefined) return null
+      const d = result.data as RepoStatus
+      return d && d.type === "repoStatus" ? d : null
+    } catch {
+      return null
+    }
   }
 
   // IPC dispatch is the ONLY transport — no WS fallback.

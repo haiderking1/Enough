@@ -10,6 +10,7 @@
 import { Effect, Stream, PubSub } from "effect";
 import os from "node:os";
 import path from "node:path";
+import { execFile } from "node:child_process";
 import { AgentRuntimeImpl, NOT_CONNECTED } from "./agent_runtime";
 import {
   DesktopCommand,
@@ -61,6 +62,8 @@ import {
   default_neuralwatt_model,
   default_codex_model,
 } from "../backend/config/config";
+import { estimate_context_tokens } from "../backend/session/compaction_utils";
+import { ModelContextWindow } from "../backend/agent/models";
 
 export type SessionResponse = {
   id: string;
@@ -134,6 +137,7 @@ export type DesktopResponse =
   | { type: "connections.list"; connections: ConnectionInfo[]; catalog: WsModelsCatalog }
   | { type: "codex.login.start"; user_code: string; verify_url: string; poll_interval: number }
   | { type: "codex.login.cancelled" }
+  | { type: "repoStatus"; added: number; removed: number; branch: string; contextPct: number }
   | WsModelsCatalog;
 
 /** Payload carried by the `connection.changed` event (and the connections responses). */
@@ -398,6 +402,61 @@ const buildModelsCatalog = (runtime: AgentRuntimeImpl): Effect.Effect<WsModelsCa
   });
 };
 
+/**
+ * Run a git subcommand in `cwd` and return its stdout. Resolves with "" on any
+ * failure (not a repo, git missing, non-zero exit) so callers can treat absence
+ * of git as zero-state rather than an error.
+ */
+const runGit = (cwd: string, args: string[]): Effect.Effect<string, never> =>
+  Effect.tryPromise({
+    try: () =>
+      new Promise<string>((resolve) => {
+        execFile("git", ["-C", cwd, ...args], { maxBuffer: 1 << 20 }, (_err, stdout) => {
+          resolve(typeof stdout === "string" ? stdout : "");
+        });
+      }),
+    catch: () => "",
+  }).pipe(Effect.orElseSucceed(() => ""));
+
+/** Added/removed line counts from `git diff --shortstat HEAD` (all uncommitted changes). */
+const gitShortstat = (cwd: string): Effect.Effect<{ added: number; removed: number }, never> =>
+  Effect.gen(function* () {
+    const out = yield* runGit(cwd, ["diff", "--shortstat", "HEAD"]);
+    const added = Number((out.match(/(\d+) insertion/) || [, "0"])[1]) | 0;
+    const removed = Number((out.match(/(\d+) deletion/) || [, "0"])[1]) | 0;
+    return { added, removed };
+  });
+
+/** Current branch name; falls back to short sha for detached HEAD, "" outside a repo. */
+const gitBranch = (cwd: string): Effect.Effect<string, never> =>
+  Effect.gen(function* () {
+    let branch = (yield* runGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
+    if (branch === "" || branch === "HEAD") {
+      const sha = (yield* runGit(cwd, ["rev-parse", "--short", "HEAD"])).trim();
+      branch = sha || "";
+    }
+    return branch;
+  });
+
+/** Context-window fill % from the agent's current session messages + active model. 0 if unavailable. */
+const computeContextPct = (runtime: AgentRuntimeImpl): number => {
+  const agent = runtime.agent;
+  if (!runtime.available || !agent?.session || !runtime.config) return 0;
+  try {
+    const msgs = agent.session.build_session_context().messages || [];
+    const tokens = estimate_context_tokens(msgs).tokens;
+    const cw = ModelContextWindow(
+      runtime.config.provider,
+      runtime.config.model,
+      runtime.config.compaction?.context_window || 0,
+    );
+    if (cw <= 0 || tokens <= 0) return 0;
+    return Math.min(100, Math.round((tokens / cw) * 100));
+  } catch {
+    return 0;
+  }
+};
+
 export class DesktopBridge {
   /** Bridge-emitted events (e.g. connection.changed) merged into the event stream. */
   private connectionEvents: PubSub.PubSub<DesktopEvent>;
@@ -458,6 +517,21 @@ export class DesktopBridge {
         case "deleteSession": {
           yield* runtime.deleteSession(command.id);
           return { type: "deleteSession.success" as const };
+        }
+        case "repoStatus": {
+          // Composer status bar: git shortstat + branch for the session cwd, plus
+          // live context-window fill. All local — no provider round-trip. Works
+          // without a booted agent for the git part; context % is 0 until booted.
+          const cwd = command.cwd && command.cwd !== "" ? command.cwd : runtime.workDir;
+          const stats = yield* gitShortstat(cwd);
+          const branch = yield* gitBranch(cwd);
+          return {
+            type: "repoStatus" as const,
+            added: stats.added,
+            removed: stats.removed,
+            branch,
+            contextPct: computeContextPct(runtime),
+          };
         }
         case "prompt": {
           yield* runtime.prompt(command.text, command.attachments || undefined);

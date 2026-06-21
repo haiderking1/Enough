@@ -58,3 +58,12 @@ export interface AssistantMessage {
 }
 
 export type Message = UserMessage | AssistantMessage
+
+/** Composer status-bar snapshot: uncommitted git changes, current branch, context-window fill. */
+export interface RepoStatus {
+  type: "repoStatus"
+  added: number
+  removed: number
+  branch: string
+  contextPct: number
+}
