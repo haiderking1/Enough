@@ -88,6 +88,7 @@ export default function App() {
   const [syncingThread, setSyncingThread] = useState(false)
 
   // Live agent state
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [model, setModel] = useState<AgentModel | null>(null)
   const [modelCatalog, setModelCatalog] = useState<ModelCatalog | null>(null)
   const [sessionList, setSessionList] = useState<AgentSessionInfo[]>(() =>

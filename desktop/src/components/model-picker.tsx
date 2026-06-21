@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Check, ChevronDown, Plus, Search } from "lucide-react"
 import type { AgentModel, ModelCatalog } from "../agent/rpc"
-import { formatThinkingBadge, formatThinkingLevelForModel } from "../lib/thinking"
+import { formatThinkingBadge } from "../lib/thinking"
 
 interface ModelPickerProps {
   catalog: ModelCatalog | null
@@ -46,7 +46,6 @@ export function ModelPicker({ catalog, disabled, onSelect, onRefreshCatalog }: M
 
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
-  const [auto, setAuto] = useState(false)
   const [maxMode, setMaxMode] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -158,17 +157,6 @@ export function ModelPicker({ catalog, disabled, onSelect, onRefreshCatalog }: M
               className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
             />
           </div>
-
-          {/* Auto toggle. */}
-          <Row
-            label="Auto"
-            right={
-              <Toggle
-                checked={auto}
-                onChange={() => setAuto((v) => !v)}
-              />
-            }
-          />
 
           {/* MAX Mode toggle. */}
           <Row
