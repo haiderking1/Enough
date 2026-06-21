@@ -5,12 +5,21 @@ import { type tool } from "../opencode/types";
 import { Agent, type toolResult } from "./agent";
 import { command_context } from "../shell/command";
 import { resolve_safe_cwd } from "../shell/cwd";
+import {
+  trackDetachedChildPid,
+  untrackDetachedChildPid,
+  killTrackedDetachedChildren,
+  installDetachedShutdownHook,
+} from "../shell/process_tree";
 import { bashCommandBlocked, SanitizeBashOutput } from "./bash_sanitize";
 import { configureProcGroup as linuxConfigure, killProcessGroup as linuxKill } from "./bash_linux";
 import { configureProcGroup as unixConfigure, killProcessGroup as unixKill } from "./bash_unix";
 import { configureProcGroup as windowsConfigure, killProcessGroup as windowsKill } from "./bash_windows";
 import { configureProcGroup as otherConfigure, killProcessGroup as otherKill } from "./bash_other";
 import process from "node:process";
+
+// Reap detached children when the backend exits naturally.
+installDetachedShutdownHook();
 
 const maxBashOutput = 32000;
 const exitStdioGrace = 100; // ms
@@ -93,6 +102,7 @@ Agent.prototype.toolBash = function (
   return commandEff.pipe(
     Effect.flatMap((child) => {
       configureProcGroup(child);
+      if (child.pid) trackDetachedChildPid(child.pid);
 
       const delta = new BashDeltaEmitter((chunk) => {
         const [clean] = SanitizeBashOutput(chunk);
@@ -117,67 +127,104 @@ Agent.prototype.toolBash = function (
       const started = Date.now();
       this.registerBashCmd(child);
 
+      // waitForChildProcess: resolve once the process has exited AND its stdio
+      // has ended, with a short grace backstop so inherited stdio handles held
+      // by detached descendants can't hang us forever. Mirrors Flame's
+      // utils/child-process.ts waitForChildProcess.
       return Effect.async<toolResult, Error>((resume) => {
-        let completed = false;
+        let settled = false;
+        let exited = false;
         let exitCode: number | null = null;
-        let waitErr: Error | null = null;
+        let stdoutEnded = child.stdout === null || child.stdout === undefined;
+        let stderrEnded = child.stderr === null || child.stderr === undefined;
+        let postExitTimer: NodeJS.Timeout | undefined;
 
-        const onExit = (code: number | null, signal: string | null) => {
-          if (completed) return;
-          exitCode = code ?? -1;
-          if (code !== 0) {
-            waitErr = new Error(signal ? `signal: ${signal}` : `exit status ${code}`);
+        const cleanup = () => {
+          if (postExitTimer) {
+            clearTimeout(postExitTimer);
+            postExitTimer = undefined;
           }
-          setTimeout(() => {
-            finish();
-          }, exitStdioGrace);
-        };
-
-        const onClose = () => {
-          finish();
-        };
-
-        const finish = () => {
-          if (completed) return;
-          completed = true;
-
+          child.removeListener("error", onError);
           child.removeListener("exit", onExit);
           child.removeListener("close", onClose);
+          child.stdout?.removeListener("end", onStdoutEnd);
+          child.stderr?.removeListener("end", onStderrEnd);
           ctx.removeEventListener("abort", onAbort);
+          if (child.pid) untrackDetachedChildPid(child.pid);
           this.unregisterBashCmd(child);
+        };
 
+        const finalize = (code: number | null) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
           sw.finalize();
           delta.flush();
+          child.stdout?.destroy();
+          child.stderr?.destroy();
 
           const duration = Date.now() - started;
           const [text] = SanitizeBashOutput(sw.toString());
 
           if (ctx.aborted) {
-            let outText = text;
-            if (outText !== "" && !outText.endsWith("\n")) {
-              outText += "\n";
-            }
-            resume(Effect.succeed({ output: outText + "[interrupted]", isErr: true }));
+            const out = text === "" ? "" : text.endsWith("\n") ? text : text + "\n";
+            resume(Effect.succeed({ output: out + "Command aborted", isErr: true }));
             return;
           }
 
-          this.recordCommandRun(args.command, exitCode ?? -1, text, duration);
+          this.recordCommandRun(args.command, code ?? -1, text, duration);
 
-          if (waitErr) {
-            resume(Effect.succeed({ output: `${waitErr.message}\n${text}`, isErr: true }));
-          } else {
-            resume(Effect.succeed({ output: text }));
+          if (code !== null && code !== 0) {
+            const out = text === "" ? "" : text.endsWith("\n") ? text : text + "\n";
+            resume(Effect.succeed({ output: out + `Command exited with code ${code}`, isErr: true }));
+            return;
+          }
+          resume(Effect.succeed({ output: text }));
+        };
+
+        const maybeFinalizeAfterExit = () => {
+          if (!exited || settled) return;
+          if (stdoutEnded && stderrEnded) finalize(exitCode);
+        };
+
+        const onStdoutEnd = () => {
+          stdoutEnded = true;
+          maybeFinalizeAfterExit();
+        };
+        const onStderrEnd = () => {
+          stderrEnded = true;
+          maybeFinalizeAfterExit();
+        };
+        const onExit = (code: number | null) => {
+          exited = true;
+          exitCode = code;
+          maybeFinalizeAfterExit();
+          if (!settled) {
+            postExitTimer = setTimeout(() => finalize(code), exitStdioGrace);
           }
         };
-
+        const onClose = (code: number | null) => finalize(code);
+        const onError = (err: Error) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resume(Effect.succeed({ output: err.message, isErr: true }));
+        };
         const onAbort = () => {
           killProcessGroup(child);
-          finish();
+          finalize(exitCode);
         };
 
-        child.on("exit", onExit);
-        child.on("close", onClose);
-        ctx.addEventListener("abort", onAbort);
+        child.stdout?.once("end", onStdoutEnd);
+        child.stderr?.once("end", onStderrEnd);
+        child.once("error", onError);
+        child.once("exit", onExit);
+        child.once("close", onClose);
+        if (ctx.aborted) {
+          onAbort();
+        } else {
+          ctx.addEventListener("abort", onAbort);
+        }
       });
     }),
     Effect.catchAll((err: any) =>
@@ -201,6 +248,10 @@ Agent.prototype.killActiveBash = function (this: Agent) {
   if (cmd !== null) {
     killProcessGroup(cmd);
   }
+  // Reap any other detached children still tracked (e.g. descendants that
+  // outlived their parent). The active cmd is also in the set; re-killing a
+  // dead pid is a no-op.
+  killTrackedDetachedChildren();
 };
 
 export class BashStreamWriter {

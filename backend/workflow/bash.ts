@@ -8,6 +8,7 @@ import { Runtime } from "./runtime";
 import { type BashResult } from "./types";
 import { command_context } from "../shell/command";
 import { resolve_safe_cwd } from "../shell/cwd";
+import { killProcessTree } from "../shell/process_tree";
 
 const maxWorkflowBashOutput = 64 * 1024;
 
@@ -108,7 +109,7 @@ export function runBash(
 
         onAbort = () => {
           if (!cleanUp()) return;
-          child.kill("SIGKILL");
+          if (child.pid) killProcessTree(child.pid);
           resume(Effect.fail(new Error("interrupted")));
         };
 

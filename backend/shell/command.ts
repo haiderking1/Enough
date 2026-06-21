@@ -48,6 +48,12 @@ export const command_context = (
     return spawn(bash_exe, args, {
       env,
       cwd,
+      // detached: child becomes its own process-group leader so the whole tree
+      // can be killed via process.kill(-pid) on abort/timeout. Without this the
+      // shell's children orphan and run forever (the "stuck bash" bug).
+      detached: process.platform !== "win32",
+      // stdin ignored: commands like `read`/`cat` hit EOF instead of hanging.
+      stdio: ["ignore", "pipe", "pipe"],
       windowsHide: process.platform === "win32",
     });
   });
