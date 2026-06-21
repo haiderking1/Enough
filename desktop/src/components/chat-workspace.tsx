@@ -64,9 +64,7 @@ export const ChatWorkspace = memo(function ChatWorkspace({
         <EmptyState composer={composer} />
       ) : (
         <>
-          <div className="mx-auto min-h-0 w-full max-w-[720px] flex-1">
-            <ChatView messages={messages} sessionId={sessionId} isStreaming={streaming} />
-          </div>
+          <ChatView messages={messages} sessionId={sessionId} isStreaming={streaming} />
           <div className="absolute bottom-0 left-0 right-0 pointer-events-none bg-gradient-to-t from-background via-background/95 to-transparent pt-10 pb-4">
             <div className="mx-auto w-full max-w-[720px] px-6 pointer-events-auto">{composer}</div>
           </div>

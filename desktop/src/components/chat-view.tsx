@@ -17,23 +17,29 @@ interface ChatViewProps {
 
 export const ChatView = memo(function ChatView({ messages, sessionId, isStreaming }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const pinnedToBottomRef = useRef(true)
+  const ignoreScrollRef = useRef(false)
 
   const isNearBottom = useCallback(() => {
     const el = scrollRef.current
     if (!el) return true
-    // In flex-col-reverse, scrollTop starts at 0 at the bottom, so "near bottom"
-    // means scrollTop is close to 0.
-    return el.scrollTop <= BOTTOM_THRESHOLD_PX
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_THRESHOLD_PX
   }, [])
 
   const scrollToBottom = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
-    el.scrollTop = 0
-  }, [])
+    ignoreScrollRef.current = true
+    el.scrollTop = el.scrollHeight
+    requestAnimationFrame(() => {
+      ignoreScrollRef.current = false
+      pinnedToBottomRef.current = isNearBottom()
+    })
+  }, [isNearBottom])
 
   const handleScroll = useCallback(() => {
+    if (ignoreScrollRef.current) return
     pinnedToBottomRef.current = isNearBottom()
   }, [isNearBottom])
 
@@ -54,19 +60,28 @@ export const ChatView = memo(function ChatView({ messages, sessionId, isStreamin
     }
   }, [messages, isStreaming, scrollToBottom])
 
-  // Reversed message order so flex-col-reverse renders bottom-up correctly.
-  const reversed = messages.slice().reverse()
+  // Markdown / tools grow after paint — keep up while pinned.
+  useEffect(() => {
+    const content = contentRef.current
+    if (!content) return
+
+    const ro = new ResizeObserver(() => {
+      if (pinnedToBottomRef.current) {
+        scrollToBottom()
+      }
+    })
+    ro.observe(content)
+    return () => ro.disconnect()
+  }, [sessionId, scrollToBottom])
 
   return (
-    <div
-      ref={scrollRef}
-      onScroll={handleScroll}
-      className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto px-6 pt-6 pb-36"
-    >
-      <div className="w-full space-y-6">
-        {reversed.map((m) => (
-          <MessageRow key={m.id} message={m} />
-        ))}
+    <div ref={scrollRef} onScroll={handleScroll} className="h-full w-full overflow-y-auto">
+      <div ref={contentRef} className="mx-auto w-full max-w-[720px] px-6 pt-6 pb-36">
+        <div className="space-y-6">
+          {messages.map((m) => (
+            <MessageRow key={m.id} message={m} />
+          ))}
+        </div>
       </div>
     </div>
   )
