@@ -11,55 +11,49 @@ permissions:
 
 jobs:
   test:
-    name: Test & build
+    name: Test & Build (Ubuntu)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          go-version-file: go.mod
-          cache: true
+          bun-version: latest
 
-      - name: Download modules
-        run: go mod download
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Vet
-        run: go vet ./...
+      - name: Typecheck
+        run: bun run typecheck
 
       - name: Test
-        run: go test -race -count=1 ./...
+        run: bun test
 
       - name: Build
-        run: go build -o bin/enough ./cmd/enough
+        run: bun run build:desktop
 
   test-windows:
-    name: Windows Build & Test
+    name: Test & Build (Windows)
     runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          go-version-file: go.mod
-          cache: true
+          bun-version: latest
 
-      - name: Download modules
-        run: go mod download
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Build enough.exe
-        run: go build -o bin/enough.exe ./cmd/enough
+      - name: Typecheck
+        run: bun run typecheck
 
-      - name: Test shell & fslock packages
-        run: go test ./backend/shell/... ./backend/fslock/...
+      - name: Test
+        run: bun test
 
-      - name: Provision Git Bash
-        run: powershell -File scripts/install-windows.ps1 -NonInteractive
-
-      - name: Test Agent Bash command
-        run: go test ./backend/agent/ -run TestBash -count=1
-
+      - name: Build
+        run: bun run build:desktop
