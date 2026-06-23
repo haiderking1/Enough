@@ -44,6 +44,7 @@ import {
   enable_codex_provider,
   disabled_models,
   toggle_model_enabled,
+  disable_model_ids,
 } from "../backend/config/provider";
 import { delete_api_key, has_api_key, get_api_key } from "../backend/secrets/store";
 import {
@@ -353,6 +354,23 @@ const refreshDesktopModelRegistry = (force?: boolean): Effect.Effect<void, never
   );
 };
 
+/** Opt-in picker: after registry refresh, disable every model for the connected provider(s). */
+const disableModelsOnConnect = (provider: string): Effect.Effect<void, Error> =>
+  Effect.gen(function* () {
+    // OpenCode Go + Zen share one API key — refresh both catalogs, disable all ids.
+    const targets =
+      provider === provider_opencode || provider === provider_opencode_zen
+        ? [provider_opencode, provider_opencode_zen]
+        : [provider];
+    const ids = new Set<string>();
+    for (const p of targets) {
+      for (const m of models_for_provider(p, default_registry)) {
+        ids.add(m.id);
+      }
+    }
+    yield* disable_model_ids([...ids]);
+  });
+
 const buildModelsCatalog = (runtime: AgentRuntimeImpl): Effect.Effect<WsModelsCatalog, never> => {
   return Effect.gen(function* () {
     const providers = yield* Effect.all(
@@ -648,7 +666,10 @@ export class DesktopBridge {
             yield* apply_provider_model(provider, defaultModelFor(provider), "");
           }).pipe(Effect.mapError(asError));
           yield* runtime.reconnect();
-          return yield* buildConnectionsResult(runtime, true);
+          // Refresh first so Zen/Go catalogs are loaded before we disable ids.
+          yield* refreshDesktopModelRegistry(true);
+          yield* disableModelsOnConnect(provider).pipe(Effect.mapError(asError));
+          return yield* buildConnectionsResult(runtime, false);
         }
         case "removeKey": {
           const provider = command.provider;
@@ -677,7 +698,9 @@ export class DesktopBridge {
             .then(async () => {
               await Effect.runPromise(enable_codex_provider().pipe(Effect.mapError(asError)));
               await Effect.runPromise(runtime.reconnect());
-              const result = await Effect.runPromise(buildConnectionsResult(runtime, true));
+              await Effect.runPromise(refreshDesktopModelRegistry(true));
+              await Effect.runPromise(disableModelsOnConnect(provider_codex).pipe(Effect.mapError(asError)));
+              const result = await Effect.runPromise(buildConnectionsResult(runtime, false));
               self.emitConnectionChanged(result);
             })
             .catch(async (e) => {

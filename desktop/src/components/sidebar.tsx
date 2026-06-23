@@ -11,6 +11,7 @@ import {
   Settings,
 } from "lucide-react"
 import type { AgentSessionInfo } from "../agent/rpc"
+import { projectDisplayName } from "../lib/path"
 
 interface SidebarProps {
   sessions: AgentSessionInfo[]
@@ -27,12 +28,6 @@ interface SidebarProps {
   onDeleteThread: (id: string) => void
   onOpenSearch: () => void
   onOpenSettings: () => void
-}
-
-function projectName(cwd: string): string {
-  if (!cwd) return "(unknown)"
-  const parts = cwd.replace(/\/+$/, "").split("/")
-  return parts[parts.length - 1] || cwd
 }
 
 function relTime(iso: string): string {
@@ -95,7 +90,7 @@ export function Sidebar({
       arr.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
       result.push({
         cwd,
-        name: projectAliases[cwd] ?? projectName(cwd),
+        name: projectDisplayName(cwd, projectAliases[cwd]),
         sessions: arr,
         latest: arr.length ? new Date(arr[0].modified).getTime() : 0,
       })

@@ -53,16 +53,6 @@ export function ModelPicker({
   const rootRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const activeModel = useMemo(
-    () => models.find((m) => m.id === state?.modelId && m.provider === state?.provider),
-    [models, state?.modelId, state?.provider],
-  )
-
-  const activeLabel = useMemo(() => {
-    if (!activeModel) return state?.modelName ?? "Model"
-    return labelFor(activeModel)
-  }, [activeModel, state?.modelName])
-
   const filteredModels = useMemo(() => {
     let list = models.filter((m) => m.enabled !== false)
     const q = query.trim().toLowerCase()
@@ -74,6 +64,20 @@ export function ModelPicker({
         m.provider.toLowerCase().includes(q),
     )
   }, [models, query])
+
+  const activeModel = useMemo(
+    () =>
+      filteredModels.find(
+        (m) => m.id === state?.modelId && m.provider === state?.provider,
+      ),
+    [filteredModels, state?.modelId, state?.provider],
+  )
+
+  const activeLabel = useMemo(() => {
+    if (activeModel) return labelFor(activeModel)
+    if (filteredModels.length > 0) return "Select model"
+    return "Enable models"
+  }, [activeModel, filteredModels.length])
 
   useEffect(() => {
     if (!open) return
@@ -228,8 +232,9 @@ export function ModelPicker({
 
               <div className="my-1 h-px" style={{ background: C.divider }} />
 
-              {/* Active / selectable model rows. */}
-              {filteredModels.slice(0, 6).map((model) => {
+              {/* Enabled models — scroll when the catalog is large. */}
+              <div className="max-h-[min(320px,50vh)] overflow-y-auto">
+              {filteredModels.map((model) => {
                 const isActive = model.id === state?.modelId && model.provider === state?.provider
                 const supportsThinking = model.thinkingLevels && model.thinkingLevels.length > 0
                 return (
@@ -272,10 +277,11 @@ export function ModelPicker({
                   </div>
                 )
               })}
+              </div>
 
               {filteredModels.length === 0 && (
                 <div className="px-2 py-2 text-[12px]" style={{ color: C.muted }}>
-                  No models found
+                  {query.trim() ? "No models match your search" : "No enabled models — enable them in Settings"}
                 </div>
               )}
 

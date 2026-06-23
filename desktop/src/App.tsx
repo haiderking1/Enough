@@ -22,6 +22,7 @@ import {
 } from "./agent/rpc"
 
 import { bumpZoom, initZoom, resetZoom, ZOOM_STEP } from "./lib/zoom"
+import { pathBasename } from "./lib/path"
 import { applyTheme } from "./components/settings/themes"
 import { loadPrefs, savePrefs, type HollowPrefs, type PrefKey } from "./components/settings/prefs"
 import type { SectionId } from "./components/settings/nav"
@@ -108,10 +109,7 @@ export default function App() {
   const [projectAliases, setProjectAliases] = useState<Record<string, string>>(() =>
     ({
       ...Object.fromEntries(
-        sessionList.map((session) => [
-          session.cwd,
-          session.cwd.replace(/\/+$/, "").split("/").pop() || session.cwd,
-        ]),
+        sessionList.map((session) => [session.cwd, pathBasename(session.cwd)]),
       ),
       ...loadJSON<Record<string, string>>("hollow-project-names", {}),
     }),
@@ -600,6 +598,9 @@ export default function App() {
     setPickerOpen(false)
     setAddedProjects((prev) => (prev.includes(dir) ? prev : [dir, ...prev]))
     setProjectCwd(dir)
+    setProjectAliases((prev) =>
+      prev[dir] ? prev : { ...prev, [dir]: pathBasename(dir) },
+    )
   }, [])
 
   const handleSelectModel = useCallback((provider: string, modelId: string, thinkingLevel: string) => {

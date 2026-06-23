@@ -215,6 +215,19 @@ export const toggle_model_enabled = (
     return next;
   });
 
+/** Add model ids to the disabled list (opt-in picker: new connects start with none enabled). */
+export const disable_model_ids = (
+  modelIds: string[],
+): Effect.Effect<void, Error> =>
+  Effect.gen(function* () {
+    if (modelIds.length === 0) return;
+    const cfg = yield* load().pipe(Effect.mapError(asError));
+    const next = new Set(cfg.disabled_models ?? []);
+    for (const id of modelIds) next.add(id);
+    cfg.disabled_models = [...next];
+    yield* save(cfg).pipe(Effect.mapError(asError));
+  });
+
 const asError = (e: unknown): Error => {
   if (e instanceof Error) return e;
   if (e && typeof e === "object") {
