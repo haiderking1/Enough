@@ -618,6 +618,9 @@ class HollowClient {
         break
       }
       case "done":
+        if (this.streamBlocks.length > 0) {
+          this.emitAssistantUpdate()
+        }
         this.streaming = false
         this.toolMetaMap.clear()
         this.emit({ type: "agent_end" })

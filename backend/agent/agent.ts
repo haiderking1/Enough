@@ -696,10 +696,23 @@ export class Agent {
 
       let streamStarted = false;
       let streamedReasoningLen = 0;
+      let streamedTextLen = 0;
       const startStream = () => {
         if (streamStarted) return;
         streamStarted = true;
         this.streamStart();
+      };
+      const flushStreamTail = (finalMsg: message): void => {
+        const reasoning = get_reasoning(finalMsg);
+        if (reasoning !== "" && reasoning.length > streamedReasoningLen) {
+          startStream();
+          this.thinkingDelta(reasoning.slice(streamedReasoningLen));
+        }
+        const text = content_string(finalMsg);
+        if (text !== "" && text.length > streamedTextLen) {
+          startStream();
+          this.streamDelta(text.slice(streamedTextLen));
+        }
       };
 
       const req: chat_request = {
@@ -721,6 +734,7 @@ export class Agent {
             on_text: (delta: string) => {
               startStream();
               this.streamDelta(delta);
+              streamedTextLen += delta.length;
             },
           })
         );
@@ -754,18 +768,7 @@ export class Agent {
 
       // No tool calls — text-only response
       if (!msg.tool_calls || msg.tool_calls.length === 0) {
-        const text = content_string(msg);
-        const reasoning = get_reasoning(msg);
-        if (reasoning !== "" && reasoning.length > streamedReasoningLen) {
-          startStream();
-          this.thinkingDelta(reasoning.slice(streamedReasoningLen));
-        }
-        if (!streamStarted) {
-          if (text !== "") {
-            startStream();
-            this.streamDelta(text);
-          }
-        }
+        flushStreamTail(msg);
         this.messages.push(msg);
         this.persist(msg);
 
@@ -833,6 +836,7 @@ export class Agent {
       }
 
       // Has tool calls — process them
+      flushStreamTail(msg);
       this.messages.push(msg);
       if (cfg.memory?.skill_nudge_interval && cfg.memory.skill_nudge_interval > 0) {
         this.itersSinceSkill++;
