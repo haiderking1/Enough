@@ -208,6 +208,7 @@ export const mapDispatchResponse = (
       };
 
     case "deleteSession.success":
+    case "deleteProjectSessions.success":
     case "setModel.success":
     case "interrupt.success":
       // The renderer refreshes session/model state on its own after these;

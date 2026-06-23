@@ -22,7 +22,7 @@ import {
 } from "./agent/rpc"
 
 import { bumpZoom, initZoom, resetZoom, ZOOM_STEP } from "./lib/zoom"
-import { pathBasename } from "./lib/path"
+import { pathBasename, sameProjectCwd } from "./lib/path"
 import { applyTheme } from "./components/settings/themes"
 import { loadPrefs, savePrefs, type HollowPrefs, type PrefKey } from "./components/settings/prefs"
 import type { SectionId } from "./components/settings/nav"
@@ -221,6 +221,8 @@ export default function App() {
   const lastBlocksRef = useRef<Block[]>([])
   const sessionListRef = useRef(sessionList)
   sessionListRef.current = sessionList
+  /** After delete, trust the next list_sessions response — don't resurrect stale rows. */
+  const skipOptimisticMergeRef = useRef(false)
   const addedProjectsRef = useRef(addedProjects)
   addedProjectsRef.current = addedProjects
 
@@ -358,7 +360,10 @@ export default function App() {
             case "list_sessions": {
               const sessions = event.data.sessions
               setSessionList((prev) => {
-                const merged = mergeSessionList(sessions, prev, currentSessionIdRef.current)
+                const merged = skipOptimisticMergeRef.current
+                  ? sessions
+                  : mergeSessionList(sessions, prev, currentSessionIdRef.current)
+                skipOptimisticMergeRef.current = false
                 localStorage.setItem("hollow-session-cache", JSON.stringify(merged))
                 return merged
               })
@@ -529,12 +534,17 @@ export default function App() {
 
   // Remove a project from the app (folder stays on disk) and delete its threads.
   const handleDeleteProject = useCallback(
-    (cwd: string) => {
-      const sessions = sessionListRef.current.filter((s) => s.cwd === cwd)
+    (cwd: string, groupSessions?: AgentSessionInfo[]) => {
+      const sessions =
+        groupSessions && groupSessions.length > 0
+          ? groupSessions
+          : sessionListRef.current.filter((s) => sameProjectCwd(s.cwd, cwd))
       const ids = sessions.map((s) => s.id)
+      const sessionPaths = sessions.map((s) => s.path || s.id)
       const wasActive = sessions.some((s) => s.id === currentSessionId)
 
-      setAddedProjects((prev) => prev.filter((p) => p !== cwd))
+      skipOptimisticMergeRef.current = true
+      setAddedProjects((prev) => prev.filter((p) => !sameProjectCwd(p, cwd)))
       setProjectAliases((prev) => {
         const next = { ...prev }
         delete next[cwd]
@@ -548,14 +558,18 @@ export default function App() {
       setHiddenThreads((prev) => prev.filter((id) => !ids.includes(id)))
       for (const id of ids) messagesCacheRef.current.delete(id)
 
-      setSessionList((prev) => prev.filter((s) => s.cwd !== cwd))
+      const nextList = sessionListRef.current.filter((s) => !sameProjectCwd(s.cwd, cwd))
+      sessionListRef.current = nextList
+      localStorage.setItem("hollow-session-cache", JSON.stringify(nextList))
+      setSessionList(nextList)
 
       if (wasActive) {
-        const next = pickNextSession(sessionListRef.current.filter((s) => s.cwd !== cwd))
+        const next = pickNextSession(nextList)
         streamingIdRef.current = null
         setMessages([])
         setSyncingThread(false)
         if (next) {
+          currentSessionIdRef.current = next.id
           setCurrentSessionId(next.id)
           setProjectCwd(next.cwd)
           const cached = messagesCacheRef.current.get(next.id)
@@ -568,14 +582,18 @@ export default function App() {
           }
           send({ type: "switch_session", sessionPath: next.id })
         } else {
+          currentSessionIdRef.current = null
           setCurrentSessionId(null)
+          setProjectCwd(null)
           setLoadingThread(false)
         }
+      } else if (projectCwd && sameProjectCwd(projectCwd, cwd)) {
+        setProjectCwd(null)
       }
 
-      send({ type: "delete_project_sessions", cwd })
+      send({ type: "delete_project_sessions", cwd, sessionPaths })
     },
-    [currentSessionId],
+    [currentSessionId, projectCwd],
   )
 
   const handleRenameThread = useCallback((id: string, name: string) => {
@@ -592,6 +610,7 @@ export default function App() {
     (id: string) => {
       const wasActive = id === currentSessionId
 
+      skipOptimisticMergeRef.current = true
       messagesCacheRef.current.delete(id)
       setThreadAliases((prev) => {
         const next = { ...prev }
@@ -599,17 +618,20 @@ export default function App() {
         return next
       })
       setHiddenThreads((prev) => prev.filter((hid) => hid !== id))
-      setSessionList((prev) => prev.filter((s) => s.id !== id))
+      const nextList = sessionListRef.current.filter((s) => s.id !== id)
+      sessionListRef.current = nextList
+      localStorage.setItem("hollow-session-cache", JSON.stringify(nextList))
+      setSessionList(nextList)
 
       if (wasActive) {
-        const next = pickNextSession(sessionListRef.current, {
-          excludeId: id,
+        const next = pickNextSession(nextList, {
           preferCwd: projectCwd,
         })
         streamingIdRef.current = null
         setMessages([])
         setSyncingThread(false)
         if (next) {
+          currentSessionIdRef.current = next.id
           setCurrentSessionId(next.id)
           setProjectCwd(next.cwd)
           const cached = messagesCacheRef.current.get(next.id)
@@ -622,6 +644,7 @@ export default function App() {
           }
           send({ type: "switch_session", sessionPath: next.id })
         } else {
+          currentSessionIdRef.current = null
           setCurrentSessionId(null)
           setLoadingThread(false)
         }

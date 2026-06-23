@@ -23,7 +23,7 @@ interface SidebarProps {
   onAddProject: () => void
   onNewThread: (cwd: string) => void
   onRenameProject: (cwd: string, name: string) => void
-  onDeleteProject: (cwd: string) => void
+  onDeleteProject: (cwd: string, sessions: AgentSessionInfo[]) => void
   onRenameThread: (id: string, name: string) => void
   onDeleteThread: (id: string) => void
   onOpenSearch: () => void
@@ -208,7 +208,7 @@ export function Sidebar({
                       <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
                     </IconBtn>
                     <IconBtn
-                      onClick={() => onDeleteProject(group.cwd)}
+                      onClick={() => onDeleteProject(group.cwd, group.sessions)}
                       aria-label="Remove project"
                       title="Remove project (deletes its threads)"
                     >

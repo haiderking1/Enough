@@ -1,3 +1,14 @@
+/** True when two paths refer to the same project folder (Windows-safe). */
+export function sameProjectCwd(a: string, b: string): boolean {
+  const norm = (p: string) =>
+    p
+      .trim()
+      .replace(/\\/g, "/")
+      .replace(/\/+$/, "")
+      .toLowerCase()
+  return norm(a) === norm(b)
+}
+
 /** Last segment of a file path (works with `/` and `\`, including Windows drive paths). */
 export function pathBasename(cwd: string): string {
   if (!cwd) return "(unknown)"

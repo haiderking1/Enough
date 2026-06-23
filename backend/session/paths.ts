@@ -10,12 +10,22 @@ export const agent_subdir = "agent";
 export const sessions_subdir = "sessions";
 export const current_version = 1;
 
+/** True when two paths refer to the same project folder (Windows-safe). */
+export const same_project_cwd = (left: string, right: string): boolean => {
+  const a = path.resolve(left.trim() === "" ? process.cwd() : left);
+  const b = path.resolve(right.trim() === "" ? process.cwd() : right);
+  if (process.platform === "win32") {
+    return a.toLowerCase() === b.toLowerCase();
+  }
+  return a === b;
+};
+
 export const home_agent_dir = (): Effect.Effect<string, Error> => {
   return Effect.succeed(path.join(home_dir(), agent_subdir));
 };
 
 export const encode_cwd = (cwd: string): string => {
-  let s = cwd;
+  let s = path.resolve(cwd.trim() === "" ? process.cwd() : cwd);
   // Strip leading path separator
   if (s.startsWith(path.sep)) {
     s = s.substring(path.sep.length);

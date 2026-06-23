@@ -19,6 +19,7 @@ import {
   upsertTool,
   type StreamBlock,
 } from "./stream-blocks"
+import { sameProjectCwd } from "../lib/path"
 
 type Listener = (event: AgentEvent) => void
 
@@ -374,6 +375,55 @@ class HollowClient {
               this.emit({ type: "bridge_error", error: result.error ?? "Failed to delete session" })
               this.dispatch({ type: "listSessions" })
               return
+            }
+            this.dispatch({ type: "listSessions" })
+          })
+          .catch((err) => {
+            this.skipAutoOpenUntilEmpty = false
+            this.emit({ type: "bridge_error", error: String(err?.message || err) })
+            this.dispatch({ type: "listSessions" })
+          })
+        break
+      }
+      case "delete_project_sessions": {
+        const cwd = commandText(command, "cwd")
+        if (cwd === "") break
+        const sessionPaths = Array.isArray(command.sessionPaths)
+          ? command.sessionPaths.filter((p): p is string => typeof p === "string" && p !== "")
+          : []
+        const inProject = this.sessions.filter((s) => sameProjectCwd(s.cwd, cwd))
+        const clearingActive = inProject.some(
+          (s) => s.id === this.currentSessionId || s.path === this.currentSessionId,
+        )
+        if (clearingActive) {
+          this.currentSessionId = null
+          this.skipAutoOpenUntilEmpty = true
+        }
+        for (const session of inProject) {
+          this.histories.delete(session.id)
+          if (session.path) this.histories.delete(session.path)
+        }
+        this.sessions = this.sessions.filter((s) => !sameProjectCwd(s.cwd, cwd))
+        if (!window.hollowDesktop) {
+          this.emit({ type: "bridge_error", error: "Desktop IPC unavailable — run via electron:dev" })
+          break
+        }
+        void window.hollowDesktop
+          .dispatch({ type: "deleteProjectSessions", cwd, sessionPaths })
+          .then((result) => {
+            if (!result.ok) {
+              this.skipAutoOpenUntilEmpty = false
+              this.emit({ type: "bridge_error", error: result.error ?? "Failed to remove project" })
+              this.dispatch({ type: "listSessions" })
+              return
+            }
+            const data = result.data as { deleted?: number } | undefined
+            const deleted = typeof data?.deleted === "number" ? data.deleted : 0
+            if (deleted === 0 && (sessionPaths.length > 0 || inProject.length > 0)) {
+              this.emit({
+                type: "bridge_error",
+                error: "Project was removed from the app but no session files were deleted from disk.",
+              })
             }
             this.dispatch({ type: "listSessions" })
           })

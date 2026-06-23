@@ -136,6 +136,7 @@ export type DesktopResponse =
   | { type: "session.list"; sessions: SessionResponse[] }
   | { type: "session.history"; sessionId: string; cwd: string; messages: WsHistoryMessage[] }
   | { type: "deleteSession.success" }
+  | { type: "deleteProjectSessions.success"; deleted: number }
   | { type: "prompt.success" }
   | { type: "interrupt.success" }
   | { type: "setModel.success" }
@@ -600,6 +601,13 @@ export class DesktopBridge {
         case "deleteSession": {
           yield* runtime.deleteSession(command.id);
           return { type: "deleteSession.success" as const };
+        }
+        case "deleteProjectSessions": {
+          const deleted = yield* runtime.deleteSessionsForCwd(
+            command.cwd,
+            command.sessionPaths ?? [],
+          );
+          return { type: "deleteProjectSessions.success" as const, deleted };
         }
         case "repoStatus": {
           // Composer status bar: git shortstat + branch for the session cwd, plus

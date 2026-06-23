@@ -14,6 +14,8 @@ import { EnsureBootstrapped } from "../backend/skills/bootstrap";
 import { open_session, list_for_cwd, list_all } from "../backend/session/list";
 import { continue_recent, start_new, type manager } from "../backend/session/manager";
 import { delete_session } from "../backend/session/delete";
+import { delete_for_cwd } from "../backend/session/delete_cwd";
+import { same_project_cwd } from "../backend/session/paths";
 import { type info } from "../backend/session/types";
 import { new_client_for_runtime } from "../backend/opencode/runtime_client";
 import { content_string } from "../backend/opencode/types";
@@ -225,6 +227,20 @@ export class AgentRuntimeImpl {
         }
       }
       yield* delete_session(resolvedTarget);
+    });
+  }
+
+  deleteSessionsForCwd(cwd: string, sessionPaths: readonly string[] = []): Effect.Effect<number, Error> {
+    const self = this;
+    return Effect.gen(function* () {
+      const resolvedCwd = path.resolve(cwd);
+      if (self.agent?.session) {
+        const sessionCwd = self.agent.session.cwd();
+        if (sessionCwd !== "" && same_project_cwd(sessionCwd, resolvedCwd)) {
+          self.agent.LoadSession(null);
+        }
+      }
+      return yield* delete_for_cwd(resolvedCwd, "", [...sessionPaths]);
     });
   }
 

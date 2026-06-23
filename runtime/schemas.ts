@@ -32,6 +32,13 @@ export const DeleteSession = Schema.Struct({
 });
 export type DeleteSession = Schema.Schema.Type<typeof DeleteSession>;
 
+export const DeleteProjectSessions = Schema.Struct({
+  type: Schema.Literal("deleteProjectSessions"),
+  cwd: Schema.String,
+  sessionPaths: Schema.optional(Schema.Array(Schema.String)),
+});
+export type DeleteProjectSessions = Schema.Schema.Type<typeof DeleteProjectSessions>;
+
 export const AttachmentSchema = Schema.Struct({
   mime: Schema.String,
   data: Schema.String, // base64
@@ -120,6 +127,7 @@ export const DesktopCommand = Schema.Union(
   OpenSession,
   NewSession,
   DeleteSession,
+  DeleteProjectSessions,
   Prompt,
   Interrupt,
   SetModel,

@@ -4,10 +4,23 @@ import { Effect } from "effect";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { sidecar_path } from "./fingerprints";
 
 // DeleteResult reports how a session file was removed.
 export type delete_result = {
   method: string; // "trash" or "unlink"
+};
+
+const remove_sidecar = async (session_path: string): Promise<void> => {
+  const sidecar = sidecar_path(session_path);
+  if (sidecar === "") return;
+  try {
+    await fs.unlink(sidecar);
+  } catch (err: any) {
+    if (err?.code !== "ENOENT") {
+      throw err;
+    }
+  }
 };
 
 // Delete removes a session JSONL file, trying the trash CLI first like Flame.
@@ -20,6 +33,13 @@ export const delete_session = (session_path: string): Effect.Effect<delete_resul
       }
       // Verify file exists
       await fs.stat(clean_path);
+
+      // Windows has no reliable trash CLI — unlink directly.
+      if (process.platform === "win32") {
+        await fs.unlink(clean_path);
+        await remove_sidecar(clean_path);
+        return { method: "unlink" };
+      }
 
       const base = path.basename(clean_path);
       const args = base.startsWith("-") ? ["--", clean_path] : [clean_path];
@@ -53,11 +73,13 @@ export const delete_session = (session_path: string): Effect.Effect<delete_resul
       }
 
       if (trashed) {
+        await remove_sidecar(clean_path);
         return { method: "trash" };
       }
 
       try {
         await fs.unlink(clean_path);
+        await remove_sidecar(clean_path);
         return { method: "unlink" };
       } catch (unlink_err: any) {
         if (trash_err !== null) {
