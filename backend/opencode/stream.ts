@@ -27,6 +27,7 @@ type stream_delta = {
   role?: string;
   content?: string;
   reasoning_content?: string;
+  reasoning_details?: unknown;
   reasoning?: string;
   reasoning_text?: string;
   tool_calls?: tool_call_partial[];
@@ -48,11 +49,28 @@ type stream_chunk = {
   } | null;
 };
 
-const reasoning_delta = (d: stream_delta): string => {
-  for (const s of [d.reasoning_content, d.reasoning, d.reasoning_text]) {
-    if (s !== undefined && s !== null && s !== "") {
-      return s;
+const reasoning_text_from_delta = (value: unknown): string => {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    const parts: string[] = [];
+    for (const item of value) {
+      if (typeof item === "string") {
+        parts.push(item);
+      } else if (item && typeof item === "object" && "text" in item) {
+        const text = (item as { text?: unknown }).text;
+        if (typeof text === "string" && text !== "") parts.push(text);
+      }
     }
+    return parts.join("");
+  }
+  return "";
+};
+
+const reasoning_delta = (d: stream_delta): string => {
+  for (const value of [d.reasoning_content, d.reasoning_details, d.reasoning, d.reasoning_text]) {
+    const text = reasoning_text_from_delta(value);
+    if (text !== "") return text;
   }
   return "";
 };

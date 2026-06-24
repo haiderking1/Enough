@@ -10,6 +10,7 @@ export type chat_request = {
   stream?: boolean;
   thinking?: unknown;
   reasoning_effort?: string;
+  reasoning_split?: boolean;
   stream_options?: stream_options;
 };
 export type chat_response = { choices: choice[]; error?: api_error };

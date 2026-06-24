@@ -27,6 +27,7 @@ import {
   provider_opencode,
   provider_opencode_zen,
   provider_neuralwatt,
+  provider_minimax,
   lookup_catalog_model
 } from "../backend/opencode/providers";
 import {
@@ -36,6 +37,8 @@ import {
 import {
   supported_thinking_levels,
   format_thinking_level_for_model,
+  default_thinking_level,
+  normalize_thinking_level,
   supports_thinking
 } from "../backend/opencode/thinking";
 import {
@@ -60,9 +63,11 @@ import {
   default_endpoint,
   default_zen_endpoint,
   default_neuralwatt_endpoint,
+  default_minimax_endpoint,
   default_model,
   default_zen_model,
   default_neuralwatt_model,
+  default_minimax_model,
   default_codex_model,
 } from "../backend/config/config";
 import { estimate_context_tokens } from "../backend/session/compaction_utils";
@@ -173,6 +178,8 @@ const defaultModelFor = (provider: string): string => {
       return default_zen_model;
     case provider_neuralwatt:
       return default_neuralwatt_model;
+    case provider_minimax:
+      return default_minimax_model;
     default:
       return default_model;
   }
@@ -293,6 +300,8 @@ const checkConnected = (providerId: string): Effect.Effect<boolean, never> => {
       return has_api_key(provider_opencode);
     case provider_neuralwatt:
       return has_api_key(provider_neuralwatt);
+    case provider_minimax:
+      return has_api_key(provider_minimax);
     default:
       return has_api_key(providerId);
   }
@@ -335,6 +344,17 @@ const refreshDesktopModelRegistry = (force?: boolean): Effect.Effect<void, never
       }
     } else {
       refreshedProviders.delete(provider_neuralwatt);
+    }
+    const minimax_key_res = yield* Effect.either(get_api_key(provider_minimax));
+    if (minimax_key_res._tag === "Right" && minimax_key_res.right !== "") {
+      if (!refreshedProviders.has(provider_minimax)) {
+        const err = yield* Effect.promise(() => default_registry.refresh(undefined, provider_minimax, default_minimax_endpoint, minimax_key_res.right));
+        if (!err) {
+          refreshedProviders.add(provider_minimax);
+        }
+      }
+    } else {
+      refreshedProviders.delete(provider_minimax);
     }
     const has_cdx = yield* has_codex_auth();
     if (has_cdx) {
@@ -426,7 +446,9 @@ const buildModelsCatalog = (runtime: AgentRuntimeImpl): Effect.Effect<WsModelsCa
     const cfg = runtime.config;
     let thinking = cfg?.thinking_level || "";
     if (thinking === "" && supports_thinking(modelId)) {
-      thinking = "medium";
+      thinking = default_thinking_level(modelId);
+    } else if (thinking !== "") {
+      thinking = normalize_thinking_level(thinking, modelId);
     }
 
     let name = modelId;

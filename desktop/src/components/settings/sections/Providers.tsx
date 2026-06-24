@@ -5,10 +5,12 @@ import { cn } from "../../../lib/utils"
 import OpenCodeIcon from "../../../assets/icons/OpenCode_dark.svg"
 import OpenAIIcon from "../../../assets/icons/OpenAI_dark.svg"
 import NeuralWattIcon from "../../../assets/icons/neuralwatt.svg"
+import MiniMaxIcon from "../../../assets/icons/minimax.svg"
 
 // Provider ids (mirror backend/config/config.ts constants).
 const OPENCODE = "opencode-go" // opencode + zen share this key slot
 const NEURALWATT = "neuralwatt"
+const MINIMAX = "minimax"
 const CODEX = "openai-codex"
 
 export interface ProvidersProps {
@@ -155,6 +157,7 @@ export function Providers({
   const conn = (id: string) => connections.find((c) => c.provider === id)
   const opencodeConnected = conn(OPENCODE)?.connected ?? false
   const neuralwattConnected = conn(NEURALWATT)?.connected ?? false
+  const minimaxConnected = conn(MINIMAX)?.connected ?? false
   const codexConnected = conn(CODEX)?.connected ?? false
 
   const connect = (p: string) => {
@@ -225,6 +228,28 @@ export function Providers({
             pending={pending === NEURALWATT}
             onKeyChange={(v) => setKeys((k) => ({ ...k, [NEURALWATT]: v }))}
             onConnect={() => connect(NEURALWATT)}
+          />
+        )}
+      </ProviderCard>
+
+      <ProviderCard
+        icon={<img src={MiniMaxIcon} alt="" className="h-6 w-6" />}
+        title="MiniMax"
+        subtitle="Token Plan API key (sk-cp-…)"
+        connected={minimaxConnected}
+      >
+        {minimaxConnected ? (
+          <ConnectedRow
+            note="Key saved locally in ~/.hollow"
+            pending={pending === MINIMAX}
+            onDisconnect={() => disconnect(MINIMAX)}
+          />
+        ) : (
+          <KeyInput
+            value={keys[MINIMAX] ?? ""}
+            pending={pending === MINIMAX}
+            onKeyChange={(v) => setKeys((k) => ({ ...k, [MINIMAX]: v }))}
+            onConnect={() => connect(MINIMAX)}
           />
         )}
       </ProviderCard>

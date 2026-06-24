@@ -12,6 +12,7 @@ import { home_dir } from "../hollowhome/home";
 import {
   provider_codex,
   provider_neuralwatt,
+  provider_minimax,
   provider_opencode,
   provider_opencode_zen,
   type model_info,
@@ -23,7 +24,7 @@ import {
   title_case_model_id,
 } from "./catalog";
 import {
-  format_thinking_label,
+  format_thinking_level_for_model,
   opencode_mandatory_thinking_id,
   supported_thinking_levels,
 } from "./thinking";
@@ -110,6 +111,7 @@ export const infer_context_window = (id: string, provider?: string): number => {
   if (lower.includes("deepseek")) return 128_000;
   // NeuralWatt currently exposes GLM-scale models with 1M contexts.
   if (provider === provider_neuralwatt) return 1_048_576;
+  if (provider === provider_minimax) return 1_000_000;
 
   if (lower.includes("glm-5")) return 202_752;
 
@@ -166,8 +168,9 @@ export const infer_supports_images = (id: string): boolean => {
 };
 
 export const infer_thinking_levels = (id: string): thinking_level[] => {
-  const levels = supported_thinking_levels(id.trim().toLowerCase());
-  return levels.map((lvl) => ({ id: lvl, name: format_thinking_label(lvl) }));
+  const clean = id.trim().toLowerCase();
+  const levels = supported_thinking_levels(clean);
+  return levels.map((lvl) => ({ id: lvl, name: format_thinking_level_for_model(clean, lvl) }));
 };
 
 // ---------------------------------------------------------------------------
@@ -176,6 +179,7 @@ export const infer_thinking_levels = (id: string): thinking_level[] => {
 
 export const heuristic_model = (id: string, provider?: string): model_info => {
   const clean = id.trim();
+  const lower = clean.toLowerCase();
   return {
     id: clean,
     name: title_case_model_id(clean),
@@ -205,6 +209,9 @@ export const resolve_model = (id: string, provider = provider_opencode): model_i
     base = null;
   } else if (provider === provider_neuralwatt) {
     // NeuralWatt /models only returns ids, so we rely on heuristics + overrides.
+    base = null;
+  } else if (provider === provider_minimax) {
+    // MiniMax Token Plan uses OpenAI-compatible /models; heuristics cover gaps.
     base = null;
   } else {
     const [m, ok] = catalog_model(clean);
@@ -267,6 +274,17 @@ export const codex_fallback_ids = [
 ];
 
 export const neuralwatt_fallback_ids = ["glm-5.2"];
+
+export const minimax_fallback_ids = [
+  "MiniMax-M3",
+  "MiniMax-M2.7",
+  "MiniMax-M2.7-highspeed",
+  "MiniMax-M2.5",
+  "MiniMax-M2.5-highspeed",
+  "MiniMax-M2.1",
+  "MiniMax-M2.1-highspeed",
+  "MiniMax-M2",
+];
 
 /*
 PORT STATUS

@@ -1,7 +1,7 @@
 // PORT: backend/opencode/messages.go
 
 import { blocks_content, content_blocks, string_content, type content_block, type message, type tool_call } from "./types";
-import { normalize_messages } from "./thinking";
+import { normalize_messages, is_minimax_model } from "./thinking";
 import { supports_images } from "./models";
 
 
@@ -14,9 +14,24 @@ export const strip_response_fields = (msgs: message[]): message[] => {
 
 export const prepare_request_messages = (msgs: message[], model: string): message[] =>
   strip_images_if_needed(
-    repair_tool_messages(sanitize_tool_call_arguments(normalize_messages(strip_response_fields(msgs), model))),
+    repair_tool_messages(
+      sanitize_tool_call_arguments(
+        strip_minimax_reasoning_details(normalize_messages(strip_response_fields(msgs), model), model),
+      ),
+    ),
     model,
   );
+
+/** MiniMax expects reasoning_details as structured objects, not strings — never round-trip our split copy. */
+const strip_minimax_reasoning_details = (msgs: message[], model: string): message[] => {
+  if (!is_minimax_model(model)) return msgs;
+  return msgs.map((msg) => {
+    if (msg.role !== "assistant") return msg;
+    const next = { ...msg };
+    delete next.reasoning_details;
+    return next;
+  });
+};
 
 export const sanitize_tool_call_arguments = (msgs: message[]): message[] => {
   if (msgs.length === 0) return msgs;

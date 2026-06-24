@@ -3,9 +3,10 @@
 import { get_reasoning, type chat_request, type message } from "./types";
 import { lookup_catalog_model } from "./providers";
 
-export type thinking_level_val = "off" | "minimal" | "low" | "medium" | "high" | "max" | "xhigh" | "";
+export type thinking_level_val = "off" | "adaptive" | "minimal" | "low" | "medium" | "high" | "max" | "xhigh" | "";
 
 export const thinking_off: thinking_level_val = "off";
+export const thinking_adaptive: thinking_level_val = "adaptive";
 export const thinking_minimal: thinking_level_val = "minimal";
 export const thinking_low: thinking_level_val = "low";
 export const thinking_medium: thinking_level_val = "medium";
@@ -35,7 +36,7 @@ export const default_reasoning_levels: thinking_level_val[] = [
 
 export const early_return_variants = (model: string): boolean => {
   const id = model.toLowerCase();
-  if (id.includes("minimax-m3")) {
+  if (id.includes("minimax")) {
     return false;
   }
   const parts = [
@@ -43,7 +44,6 @@ export const early_return_variants = (model: string): boolean => {
     "deepseek-reasoner",
     "deepseek-r1",
     "deepseek-v3",
-    "minimax",
     "glm",
     "kimi",
     "k2p",
@@ -76,7 +76,7 @@ export const opencode_mandatory_thinking_id = (id: string): boolean => {
   ) {
     return true;
   }
-  const parts = ["minimax", "glm", "kimi", "k2p", "qwen", "big-pickle"];
+  const parts = ["glm", "kimi", "k2p", "qwen", "big-pickle"];
   for (const part of parts) {
     if (lower_id.includes(part)) {
       return true;
@@ -85,13 +85,22 @@ export const opencode_mandatory_thinking_id = (id: string): boolean => {
   return false;
 };
 
+export const is_minimax_model = (model: string): boolean => model.toLowerCase().includes("minimax");
+
+export const is_minimax_m3 = (model: string): boolean => model.toLowerCase().includes("minimax-m3");
+
 export const supported_thinking_levels = (model: string): thinking_level_val[] => {
   const model_lower = model.toLowerCase();
   if (model_lower.includes("gpt-")) {
     return [...default_reasoning_levels];
   }
-  if (model_lower.includes("minimax-m3")) {
-    return ["off", "medium"];
+  if (is_minimax_m3(model_lower)) {
+    // MiniMax-M3: thinking.type is "disabled" or "adaptive" — not reasoning_effort tiers.
+    return ["off", "adaptive"];
+  }
+  if (is_minimax_model(model_lower)) {
+    // M2.x: thinking is always on and cannot be disabled.
+    return [];
   }
   if (early_return_variants(model)) {
     if (mandatory_thinking(model)) {
@@ -139,18 +148,49 @@ export const step_thinking_level = (current: thinking_level_val, model: string, 
   return levels[idx];
 };
 
-export const apply_thinking_to_request = (req: chat_request, level: thinking_level_val, model: string): void => {
-  if (!supports_thinking(model)) {
-    return;
+export const normalize_thinking_level = (level: string, model: string): thinking_level_val => {
+  const parsed = parse_thinking_level(level);
+  if (is_minimax_m3(model) && (parsed === "medium" || level === "thinking")) {
+    return "adaptive";
   }
-  const model_lower = model.toLowerCase();
-  if (model_lower.includes("minimax-m3")) {
-    if (level === "off" || level === "") {
+  return parsed;
+};
+
+export const default_thinking_level = (model: string): thinking_level_val => {
+  const levels = supported_thinking_levels(model);
+  if (levels.length === 0) {
+    return "off";
+  }
+  if (levels.includes("adaptive")) {
+    return "adaptive";
+  }
+  if (levels.includes("medium")) {
+    return "medium";
+  }
+  return levels.find((l) => l !== "off") ?? levels[0];
+};
+
+const apply_minimax_thinking = (req: chat_request, level: thinking_level_val, model: string): void => {
+  const normalized = normalize_thinking_level(level, model);
+  if (is_minimax_m3(model)) {
+    if (normalized === "off" || normalized === "") {
       req.thinking = { type: "disabled" };
     } else {
       req.thinking = { type: "adaptive" };
     }
-    delete req.reasoning_effort;
+  } else {
+    req.thinking = { type: "adaptive" };
+  }
+  delete req.reasoning_split;
+  delete req.reasoning_effort;
+};
+
+export const apply_thinking_to_request = (req: chat_request, level: thinking_level_val, model: string): void => {
+  if (is_minimax_model(model)) {
+    apply_minimax_thinking(req, level, model);
+    return;
+  }
+  if (!supports_thinking(model)) {
     return;
   }
 
@@ -242,6 +282,9 @@ export const normalize_messages = (msgs: message[], model: string): message[] =>
 
 export const parse_thinking_level = (s: string): thinking_level_val => {
   switch (s) {
+    case "adaptive":
+    case "thinking":
+      return "adaptive";
     case "minimal":
     case "low":
     case "medium":
@@ -262,11 +305,13 @@ export const format_thinking_label = (level: thinking_level_val): string => {
 };
 
 export const format_thinking_level_for_model = (model: string, level: thinking_level_val): string => {
-  if (model.toLowerCase().includes("minimax-m3")) {
+  if (is_minimax_m3(model)) {
     if (level === "off" || level === "") {
-      return "none";
+      return "off";
     }
-    return "thinking";
+    if (level === "adaptive" || level === "medium") {
+      return "thinking";
+    }
   }
   return format_thinking_label(level);
 };

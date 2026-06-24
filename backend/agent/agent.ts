@@ -10,7 +10,7 @@ import { type manager } from "../session/manager";
 import { type file_entry } from "../session/types";
 import { Store } from "../memory/store";
 import { BuildSessionSystemPrompt } from "./system_prompt";
-import { LoadSoul, soul_mtime_ms, SOUL_PROMPT_MARKER } from "../memory/soul";
+import { LoadSoul, soul_mtime_ms } from "../memory/soul";
 import { ledger } from "./evidence/ledger";
 import { registry as obligationsRegistry } from "./obligations/registry";
 import { new_client_for_runtime } from "../opencode/runtime_client";
@@ -552,16 +552,7 @@ export class Agent {
 
   systemPrompt(): string {
     const soulMtime = soul_mtime_ms();
-    const soul = LoadSoul();
-    const soulMarker = SOUL_PROMPT_MARKER;
-    const soulMissing =
-      soul !== "" &&
-      (this.cachedSystemPrompt === "" || !this.cachedSystemPrompt.includes(soulMarker));
-    if (
-      this.cachedSystemPrompt === "" ||
-      soulMtime !== this.soulPromptMtime ||
-      soulMissing
-    ) {
+    if (this.cachedSystemPrompt === "" || soulMtime !== this.soulPromptMtime) {
       this.cachedSystemPrompt = this.buildSessionPrompt();
       this.soulPromptMtime = soulMtime;
       this.persistSystemPrompt();

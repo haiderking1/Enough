@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ArrowLeft, Check, ChevronDown, Plus, Search } from "lucide-react"
 import type { AgentModel, ModelCatalog } from "../agent/rpc"
+import { formatThinkingLevelDisplay, defaultThinkingLevel } from "../lib/thinking"
 
 interface ModelPickerProps {
   catalog: ModelCatalog | null
@@ -109,13 +110,7 @@ export function ModelPicker({
   }, [open])
 
   const select = (model: AgentModel) => {
-    const level = model.thinkingLevels?.length
-      ? maxMode
-        ? "max"
-        : model.thinkingLevels.includes("medium")
-          ? "medium"
-          : model.thinkingLevels.find((l) => l !== "off") ?? model.thinkingLevels[0]
-      : ""
+    const level = model.thinkingLevels?.length ? defaultThinkingLevel(model, maxMode) : ""
     onSelect(model.provider, model.id, level)
     setOpen(false)
     setQuery("")
@@ -200,7 +195,7 @@ export function ModelPicker({
                       (e.currentTarget as HTMLElement).style.background = "transparent"
                     }}
                   >
-                    <span className="font-medium capitalize">{level}</span>
+                    <span className="font-medium">{formatThinkingLevelDisplay(editingModel, level)}</span>
                     {isCurrent && <Check size={12} strokeWidth={2.5} style={{ color: C.muted }} />}
                   </button>
                 )
@@ -266,7 +261,7 @@ export function ModelPicker({
                         className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] hover:bg-white/[0.12] transition-colors"
                         style={{ color: C.muted }}
                       >
-                        <span>Edit</span>
+                        <span>{formatThinkingLevelDisplay(model, state?.thinkingLevel ?? "")}</span>
                         <Check size={12} strokeWidth={2.5} style={{ color: C.muted }} />
                       </button>
                     ) : isActive ? (

@@ -19,14 +19,17 @@ import {
 export const default_endpoint = "https://opencode.ai/zen/go/v1";
 export const default_zen_endpoint = "https://opencode.ai/zen/v1";
 export const default_neuralwatt_endpoint = "https://api.neuralwatt.com/v1";
+export const default_minimax_endpoint = "https://api.minimax.io/v1";
 export const default_model = "deepseek-v4-flash";
 export const default_zen_model = "deepseek-v4-flash";
 export const default_neuralwatt_model = "glm-5.2";
+export const default_minimax_model = "MiniMax-M3";
 export const default_codex_model = "gpt-5-codex";
 
 export const provider_opencode = "opencode-go";
 export const provider_opencode_zen = "opencode-zen";
 export const provider_neuralwatt = "neuralwatt";
+export const provider_minimax = "minimax";
 export const provider_codex = "openai-codex";
 
 export type compaction_settings = {
@@ -471,6 +474,9 @@ export const load_runtime = (
             break;
           case provider_neuralwatt:
             cfg.endpoint = default_neuralwatt_endpoint;
+            break;
+          case provider_minimax:
+            cfg.endpoint = default_minimax_endpoint;
             break;
           default:
             cfg.endpoint = default_endpoint;

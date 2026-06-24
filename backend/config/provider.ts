@@ -8,13 +8,16 @@ import {
   provider_opencode,
   provider_opencode_zen,
   provider_neuralwatt,
+  provider_minimax,
   provider_codex,
   default_endpoint,
   default_zen_endpoint,
   default_neuralwatt_endpoint,
+  default_minimax_endpoint,
   default_model,
   default_zen_model,
   default_neuralwatt_model,
+  default_minimax_model,
   default_codex_model,
   type config,
 } from "./config";
@@ -40,6 +43,11 @@ export const enable_neuralwatt_provider = (
 ): Effect.Effect<void, config_error_type> =>
   enable_opencode_provider_impl(key, provider_neuralwatt, default_neuralwatt_endpoint);
 
+export const enable_minimax_provider = (
+  key: string,
+): Effect.Effect<void, config_error_type> =>
+  enable_opencode_provider_impl(key, provider_minimax, default_minimax_endpoint);
+
 const enable_opencode_provider_impl = (
   key: string,
   provider: string,
@@ -59,6 +67,9 @@ const enable_opencode_provider_impl = (
           break;
         case provider_neuralwatt:
           cfg.model = default_neuralwatt_model;
+          break;
+        case provider_minimax:
+          cfg.model = default_minimax_model;
           break;
         default:
           cfg.model = default_model;
@@ -103,6 +114,9 @@ export const connection_settings = (): Effect.Effect<
         case provider_neuralwatt:
           endpoint = default_neuralwatt_endpoint;
           break;
+        case provider_minimax:
+          endpoint = default_minimax_endpoint;
+          break;
         default:
           endpoint = default_endpoint;
       }
@@ -118,6 +132,9 @@ export const connection_settings = (): Effect.Effect<
           break;
         case provider_neuralwatt:
           model = default_neuralwatt_model;
+          break;
+        case provider_minimax:
+          model = default_minimax_model;
           break;
         default:
           model = default_model;
@@ -143,7 +160,8 @@ export const apply_provider_model = (
       }
       case provider_opencode:
       case provider_opencode_zen:
-      case provider_neuralwatt: {
+      case provider_neuralwatt:
+      case provider_minimax: {
         const key_provider = provider === provider_opencode_zen ? provider_opencode : provider;
         const has_key = yield* secrets_has_api_key(key_provider);
         if (!has_key) {
@@ -170,6 +188,7 @@ export const apply_provider_model = (
           cfg.endpoint === "" ||
           cfg.endpoint === default_endpoint ||
           cfg.endpoint === default_neuralwatt_endpoint ||
+          cfg.endpoint === default_minimax_endpoint ||
           cfg.endpoint === codex_default_base_url_fn()
         ) {
           cfg.endpoint = default_zen_endpoint;
@@ -178,12 +197,16 @@ export const apply_provider_model = (
       case provider_neuralwatt:
         cfg.endpoint = default_neuralwatt_endpoint;
         break;
+      case provider_minimax:
+        cfg.endpoint = default_minimax_endpoint;
+        break;
       default:
         if (
           cfg.endpoint === undefined ||
           cfg.endpoint === "" ||
           cfg.endpoint === default_zen_endpoint ||
           cfg.endpoint === default_neuralwatt_endpoint ||
+          cfg.endpoint === default_minimax_endpoint ||
           cfg.endpoint === codex_default_base_url_fn()
         ) {
           cfg.endpoint = default_endpoint;

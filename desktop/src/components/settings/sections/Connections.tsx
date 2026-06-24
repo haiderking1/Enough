@@ -2,11 +2,12 @@ import { CheckCircle2, Circle } from "lucide-react"
 import type { ConnectionInfo } from "../../../agent/rpc"
 import { SettingsCard } from "../controls"
 
-const ORDER = ["opencode-go", "opencode-zen", "neuralwatt", "openai-codex"]
+const ORDER = ["opencode-go", "opencode-zen", "neuralwatt", "minimax", "openai-codex"]
 const LABELS: Record<string, string> = {
   "opencode-go": "OpenCode Go",
   "opencode-zen": "OpenCode Zen",
   neuralwatt: "NeuralWatt",
+  minimax: "MiniMax",
   "openai-codex": "OpenAI Codex",
 }
 

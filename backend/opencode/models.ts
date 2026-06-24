@@ -8,6 +8,7 @@ import { home_dir } from "../hollowhome/home";
 import {
   provider_codex,
   provider_neuralwatt,
+  provider_minimax,
   provider_opencode,
   provider_opencode_zen,
   type model_info,
@@ -32,6 +33,7 @@ import {
   resolve_supports_images,
   codex_fallback_ids,
   neuralwatt_fallback_ids,
+  minimax_fallback_ids,
   load_user_model_overrides,
 } from "./model_resolver";
 
@@ -39,10 +41,12 @@ export class registry {
   private _models: model_info[] = [];
   private _zen_models: model_info[] = [];
   private _neuralwatt_models: model_info[] = [];
+  private _minimax_models: model_info[] = [];
   private _codex_models: model_info[] = [];
   private _err: Error | null = null;
   private _zen_err: Error | null = null;
   private _neuralwatt_err: Error | null = null;
+  private _minimax_err: Error | null = null;
   private _codex_err: Error | null = null;
 
   constructor() {
@@ -50,7 +54,7 @@ export class registry {
   }
 
   private load_from_cache() {
-    const providers = ["opencode-go", "opencode-zen", "neuralwatt", "openai-codex"];
+    const providers = ["opencode-go", "opencode-zen", "neuralwatt", "minimax", "openai-codex"];
     for (const p of providers) {
       try {
         const cachePath = path.join(home_dir(), "cache", `provider_${p}_models.json`);
@@ -62,6 +66,8 @@ export class registry {
               this._zen_models = parsed;
             } else if (p === "neuralwatt") {
               this._neuralwatt_models = parsed;
+            } else if (p === "minimax") {
+              this._minimax_models = parsed;
             } else if (p === "openai-codex") {
               this._codex_models = parsed;
             } else {
@@ -116,6 +122,9 @@ export class registry {
       } else if (provider === provider_neuralwatt) {
         this._neuralwatt_models = fetched;
         this._neuralwatt_err = null;
+      } else if (provider === provider_minimax) {
+        this._minimax_models = fetched;
+        this._minimax_err = null;
       } else {
         this._models = fetched;
         this._err = null;
@@ -139,6 +148,9 @@ export class registry {
       } else if (provider === provider_neuralwatt) {
         this._neuralwatt_models = models;
         this._neuralwatt_err = error;
+      } else if (provider === provider_minimax) {
+        this._minimax_models = models;
+        this._minimax_err = error;
       } else {
         this._models = models;
         this._err = error;
@@ -153,6 +165,9 @@ export class registry {
     }
     if (provider === provider_neuralwatt) {
       return this._neuralwatt_err;
+    }
+    if (provider === provider_minimax) {
+      return this._minimax_err;
     }
     return this._err;
   }
@@ -171,6 +186,13 @@ export class registry {
     return neuralwatt_fallback_ids.map((id) => resolve_model(id, provider_neuralwatt));
   }
 
+  minimax_models_list(): model_info[] {
+    if (this._minimax_models.length > 0) {
+      return [...this._minimax_models];
+    }
+    return minimax_fallback_ids.map((id) => resolve_model(id, provider_minimax));
+  }
+
   lookup_neuralwatt(id: string): [model_info, boolean] {
     const clean = id.trim();
     if (clean === "") {
@@ -182,6 +204,19 @@ export class registry {
       }
     }
     return [resolve_model(clean, provider_neuralwatt), true];
+  }
+
+  lookup_minimax(id: string): [model_info, boolean] {
+    const clean = id.trim();
+    if (clean === "") {
+      return [{ id: "", name: "", context_window: 0, reasoning: false }, false];
+    }
+    for (const m of this._minimax_models) {
+      if (m.id === clean) {
+        return [m, true];
+      }
+    }
+    return [resolve_model(clean, provider_minimax), true];
   }
 
   async refresh_codex(ctx: AbortSignal | undefined, access_token: string): Promise<Error | null> {
@@ -247,7 +282,9 @@ export class registry {
           ? this._zen_models
           : provider === provider_neuralwatt
             ? this._neuralwatt_models
-            : this._models;
+            : provider === provider_minimax
+              ? this._minimax_models
+              : this._models;
 
     for (const m of fetched) {
       if (m.id === model_id && m.context_window > 0) {
@@ -342,6 +379,9 @@ export const fallback_models = (provider: string): model_info[] => {
   }
   if (provider === provider_neuralwatt) {
     return neuralwatt_fallback_ids.map((id) => resolve_model(id, provider_neuralwatt));
+  }
+  if (provider === provider_minimax) {
+    return minimax_fallback_ids.map((id) => resolve_model(id, provider_minimax));
   }
   if (provider === provider_codex) {
     return codex_fallback_ids.map((id) => resolve_model(id, provider_codex));

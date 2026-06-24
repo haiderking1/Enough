@@ -3,6 +3,7 @@
 export const provider_opencode = "opencode-go";
 export const provider_opencode_zen = "opencode-zen";
 export const provider_neuralwatt = "neuralwatt";
+export const provider_minimax = "minimax";
 export const provider_codex = "openai-codex";
 
 export type provider_info = { id: string; name: string };
@@ -24,6 +25,7 @@ export const model_providers = (): provider_info[] => [
   { id: provider_opencode, name: "OpenCode Go" },
   { id: provider_opencode_zen, name: "OpenCode Zen" },
   { id: provider_neuralwatt, name: "NeuralWatt" },
+  { id: provider_minimax, name: "MiniMax" },
   { id: provider_codex, name: "OpenAI Codex" },
 ];
 
@@ -44,8 +46,10 @@ export type registry_like = {
   codex_models_list?: () => model_info[];
   zen_models_list?: () => model_info[];
   neuralwatt_models_list?: () => model_info[];
+  minimax_models_list?: () => model_info[];
   models?: () => model_info[];
   lookup_neuralwatt?: (id: string) => [model_info, boolean];
+  lookup_minimax?: (id: string) => [model_info, boolean];
   lookup_codex?: (id: string) => [model_info, boolean];
 };
 
@@ -59,6 +63,10 @@ export const models_for_provider = (provider: string, registry: registry_like | 
     }
     case provider_neuralwatt: {
       const out = registry?.neuralwatt_models_list?.() ?? [];
+      sort_models(out); return out;
+    }
+    case provider_minimax: {
+      const out = registry?.minimax_models_list?.() ?? [];
       sort_models(out); return out;
     }
     default: {

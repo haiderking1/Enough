@@ -6,6 +6,8 @@ import { EmptyState, SettingsCard } from "../controls"
 import OpenCodeIcon from "../../../assets/icons/OpenCode_dark.svg"
 import OpenAIIcon from "../../../assets/icons/OpenAI_dark.svg"
 import NeuralWattIcon from "../../../assets/icons/neuralwatt.svg"
+import MiniMaxIcon from "../../../assets/icons/minimax.svg"
+import { defaultThinkingLevel } from "../../../lib/thinking"
 
 export interface ModelsProps {
   catalog: ModelCatalog | null
@@ -22,6 +24,8 @@ function providerIcon(provider: string): string | null {
       return OpenCodeIcon
     case "neuralwatt":
       return NeuralWattIcon
+    case "minimax":
+      return MiniMaxIcon
     case "openai-codex":
       return OpenAIIcon
     default:
@@ -116,11 +120,7 @@ export function Models({
         <div className="space-y-0.5">
           {filtered.map((model) => {
             const isActive = model.id === state?.modelId && model.provider === state?.provider
-            const level = model.thinkingLevels?.length
-              ? model.thinkingLevels.includes("medium")
-                ? "medium"
-                : model.thinkingLevels.find((l) => l !== "off") ?? model.thinkingLevels[0]
-              : ""
+            const level = model.thinkingLevels?.length ? defaultThinkingLevel(model) : ""
             return (
               <div
                 key={`${model.provider}:${model.id}`}

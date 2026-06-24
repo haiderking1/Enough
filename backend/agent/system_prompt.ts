@@ -1,4 +1,4 @@
-// PORT: backend/agent/system_prompt.go
+// PORT: agent/system_prompt.py (Hermes Agent)
 
 import fs from "node:fs";
 import path from "node:path";
@@ -12,7 +12,13 @@ import { BuildIndexPrompt } from "../skills/prompt_index";
 import { DiscoverAllSkills } from "../skills/discovery";
 import { FormatSkillsForPrompt } from "../skills/format";
 import { Effect } from "effect";
-import { disclosurePolicy, disclosurePolicyWithSoul, enoughHelpGuidance, soulCustomization, agentRules, systemPrompt, hasSkillManage, hasSkillTools } from "./prompt";
+import {
+  DEFAULT_AGENT_IDENTITY,
+  HOLLOW_AGENT_HELP_GUIDANCE,
+  agentRules,
+  hasSkillManage,
+  hasSkillTools,
+} from "./prompt";
 
 export const MemoryGuidance =
   "You have persistent memory across sessions. Save durable facts using the memory tool: user preferences, environment details, tool quirks, and stable conventions. " +
@@ -55,67 +61,79 @@ export interface SystemPromptInputs {
   PreloadedSkillsPrompt?: string;
 }
 
-export function BuildSessionSystemPrompt(inVal: SystemPromptInputs): string {
-  const stable = buildStableTier(inVal);
-  const context = buildContextTier(inVal);
-  const volatile = buildVolatileTier(inVal);
+export interface SystemPromptParts {
+  stable: string;
+  context: string;
+  volatile: string;
+}
 
-  const parts: string[] = [];
-  for (const p of [stable, context, volatile]) {
-    const trimmed = p.trim();
-    if (trimmed !== "") {
-      parts.push(trimmed);
-    }
-  }
-  return parts.join("\n\n");
+/** Hermes build_system_prompt_parts — three ordered tiers joined by buildSystemPrompt. */
+export function BuildSessionSystemPromptParts(inVal: SystemPromptInputs): SystemPromptParts {
+  return {
+    stable: buildStableTier(inVal),
+    context: buildContextTier(inVal),
+    volatile: buildVolatileTier(inVal),
+  };
+}
+
+export function BuildSessionSystemPrompt(inVal: SystemPromptInputs): string {
+  const parts = BuildSessionSystemPromptParts(inVal);
+  return [parts.stable, parts.context, parts.volatile].filter((p) => p.trim() !== "").join("\n\n");
 }
 
 function buildStableTier(inVal: SystemPromptInputs): string {
-  const parts: string[] = [];
+  const stableParts: string[] = [];
 
+  // Slot #1: SOUL.md replaces DEFAULT_AGENT_IDENTITY when present (load_soul_md parity).
   const soul = LoadSoul();
   if (soul !== "") {
-    parts.push(soul, disclosurePolicyWithSoul, enoughHelpGuidance, agentRules);
+    stableParts.push(soul);
   } else {
-    parts.push(systemPrompt);
+    stableParts.push(DEFAULT_AGENT_IDENTITY);
   }
 
-  let memoryToolEnabled = false;
+  // Always follows identity (HERMES_AGENT_HELP_GUIDANCE parity).
+  stableParts.push(HOLLOW_AGENT_HELP_GUIDANCE);
+
+  // Tool-aware behavioral guidance — only when tools are loaded.
+  const toolGuidance: string[] = [];
   for (const t of inVal.ToolNames) {
     if (t === ToolName) {
-      memoryToolEnabled = true;
+      toolGuidance.push(MemoryGuidance);
       break;
     }
   }
-  if (memoryToolEnabled) {
-    parts.push(MemoryGuidance);
+  if (toolGuidance.length > 0) {
+    stableParts.push(toolGuidance.join(" "));
   }
 
   if (inVal.Cfg.skills.enabled) {
     if (hasSkillManage(inVal.ToolNames)) {
-      parts.push(GuidanceBlock);
+      stableParts.push(GuidanceBlock);
     }
     if (hasSkillTools(inVal.ToolNames)) {
       const idx = BuildIndexPrompt(inVal.WorkDir, inVal.Cfg, inVal.ToolNames);
       if (idx.trim() !== "") {
-        parts.push(idx);
+        stableParts.push(idx);
       }
     } else {
       try {
         const [sks] = Effect.runSync(DiscoverAllSkills(inVal.WorkDir, inVal.Cfg));
         if (sks.length > 0) {
-          parts.push(FormatSkillsForPrompt(sks).trim());
+          stableParts.push(FormatSkillsForPrompt(sks).trim());
         }
       } catch {}
     }
   }
 
   if (inVal.PreloadedSkillsPrompt && inVal.PreloadedSkillsPrompt !== "") {
-    parts.push(inVal.PreloadedSkillsPrompt);
+    stableParts.push(inVal.PreloadedSkillsPrompt);
   }
-  parts.push(mcpFilterGuidance);
 
-  return parts.join("\n\n");
+  stableParts.push(agentRules);
+  stableParts.push(mcpFilterGuidance);
+
+  return stableParts.filter((p) => p.trim() !== "").join("\n\n");
 }
 
 function buildContextTier(inVal: SystemPromptInputs): string {
@@ -148,37 +166,39 @@ function buildContextTier(inVal: SystemPromptInputs): string {
 }
 
 function buildVolatileTier(inVal: SystemPromptInputs): string {
-  const parts: string[] = [];
+  const volatileParts: string[] = [];
 
   if (inVal.Store !== null) {
     if (inVal.Cfg.memory.memory_enabled) {
       const block = inVal.Store.formatForSystemPrompt(TargetMemory);
       if (block !== "") {
-        parts.push(block);
+        volatileParts.push(block);
       }
     }
     if (inVal.Cfg.memory.user_profile_enabled) {
       const block = inVal.Store.formatForSystemPrompt(TargetUser);
       if (block !== "") {
-        parts.push(block);
+        volatileParts.push(block);
       }
     }
   }
 
   const now = inVal.Now || new Date();
-  // Day granularity only - using long date format
   const options: Intl.DateTimeFormatOptions = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
   const formatter = new Intl.DateTimeFormat("en-US", options);
-  let line = "Conversation started: " + formatter.format(now);
-  if (inVal.WorkDir !== "") {
-    line += "\nWorking directory: " + inVal.WorkDir;
-  }
+  let timestampLine = "Conversation started: " + formatter.format(now);
   if (inVal.SessionID !== "") {
-    line += "\nSession ID: " + inVal.SessionID;
+    timestampLine += "\nSession ID: " + inVal.SessionID;
   }
-  parts.push(line);
+  if (inVal.Cfg.model) {
+    timestampLine += "\nModel: " + inVal.Cfg.model;
+  }
+  if (inVal.Cfg.provider) {
+    timestampLine += "\nProvider: " + inVal.Cfg.provider;
+  }
+  volatileParts.push(timestampLine);
 
-  return parts.join("\n\n");
+  return volatileParts.filter((p) => p.trim() !== "").join("\n\n");
 }
 
 function truncateContextFile(content: string, filename: string): string {
@@ -193,9 +213,7 @@ function truncateContextFile(content: string, filename: string): string {
 
 /*
 PORT STATUS
-source path: backend/agent/system_prompt.go
-source lines: 233
-draft lines: 200
+source path: agent/system_prompt.py
 confidence: high
 status: phase_b_compile
 */
