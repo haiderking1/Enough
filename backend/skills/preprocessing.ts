@@ -1,5 +1,3 @@
-// PORT: backend/skills/preprocessing.go
-
 import { Effect } from "effect";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -210,11 +208,3 @@ export function PreprocessSkillContent(
   return Effect.succeed(substituted);
 }
 
-/*
-PORT STATUS
-source path: backend/skills/preprocessing.go
-source lines: 127
-draft lines: 198
-confidence: high
-status: phase_b_compile
-*/

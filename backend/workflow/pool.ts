@@ -1,5 +1,3 @@
-// PORT: backend/workflow/pool.go
-
 import { Effect } from "effect";
 import { type AgentResult, type PhaseSnapshot, type AgentSnapshot, cloneJSON } from "./types";
 import { type queuedJob } from "./pipeline";
@@ -331,11 +329,3 @@ proto.cancelActiveAgents = cancelActiveAgents;
 proto.ensurePhaseLocked = ensurePhaseLocked;
 proto.recountLocked = recountLocked;
 
-/*
-PORT STATUS
-source path: backend/workflow/pool.go
-source lines: 241
-draft lines: 290
-confidence: high
-status: phase_b_compile
-*/

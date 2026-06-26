@@ -1,5 +1,3 @@
-// PORT: backend/agent/grep.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import * as fsSync from "node:fs";
@@ -174,11 +172,3 @@ async function walkGrep(
   }
 }
 
-/*
-PORT STATUS
-source path: backend/agent/grep.go
-source lines: 142
-draft lines: 172
-confidence: high
-status: phase_b_compile
-*/

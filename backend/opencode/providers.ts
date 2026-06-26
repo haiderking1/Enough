@@ -1,5 +1,3 @@
-// PORT: backend/opencode/providers.go
-
 export const provider_opencode = "opencode-go";
 export const provider_opencode_zen = "opencode-zen";
 export const provider_neuralwatt = "neuralwatt";
@@ -98,11 +96,3 @@ export const provider_index = (provider: string): number => {
   return idx < 0 ? 0 : idx;
 };
 
-/*
-PORT STATUS
-source path: backend/opencode/providers.go
-source lines: 145
-draft lines: 111
-confidence: high
-status: phase_b_compile
-*/

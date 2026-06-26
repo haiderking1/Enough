@@ -1,5 +1,3 @@
-// PORT: backend/opencode/codex_catalog.go
-
 import { Effect } from "effect";
 import { codex_cloudflare_headers } from "../auth/codex_headers";
 import { codex_models, default_reasoning_levels, type model_info, provider_codex } from "./providers";
@@ -46,16 +44,3 @@ export const fetch_codex_models = (ctx: AbortSignal | undefined, access_token: s
 export const fetch_codex_models_fallback = (ctx: AbortSignal | undefined, access_token: string): Effect.Effect<model_info[], Error> =>
   fetch_codex_models(ctx, access_token).pipe(Effect.catchAll((err) => Effect.succeed(codex_models()).pipe(Effect.zipRight(Effect.fail(err)))));
 
-/*
-PORT STATUS
-source path: backend/opencode/codex_catalog.go
-source lines: 134
-draft lines: 70
-confidence: medium
-status: phase_a_draft
-todos:
-  - reconcile fallback-return-on-error behavior with Go's `(CodexModels(), err)` convention
-notes:
-  - FetchCodexModels returns ([]ModelInfo, error), modeled as Effect.Effect<model_info[], Error>.
-  - Reuses auth codex_cloudflare_headers and provider model metadata.
-*/

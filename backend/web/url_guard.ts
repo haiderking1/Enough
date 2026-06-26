@@ -1,5 +1,3 @@
-// PORT: backend/web/url_guard.go
-
 import dns from "node:dns/promises";
 
 export const is_http_url = (s: string): boolean => {
@@ -78,10 +76,3 @@ export const user_agent = (): string => {
   return "Hollow/1.0 (+https://github.com/haiderking1/Hollow)";
 };
 
-/*
-PORT STATUS
-source path: backend/web/url_guard.go
-source lines: 81
-confidence: high
-status: phase_b_compile
-*/

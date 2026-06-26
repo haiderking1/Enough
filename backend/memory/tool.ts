@@ -1,5 +1,3 @@
-// PORT: backend/memory/tool.go
-
 import { Effect } from "effect";
 import { Store, Result, TargetMemory, TargetUser } from "./store";
 
@@ -206,11 +204,3 @@ function marshal(r: Result): [string, boolean] {
   }
 }
 
-/*
-PORT STATUS
-source path: backend/memory/tool.go
-source lines: 176
-draft lines: 189
-confidence: high
-status: phase_b_compile
-*/

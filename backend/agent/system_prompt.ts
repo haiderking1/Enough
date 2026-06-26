@@ -1,5 +1,3 @@
-// PORT: agent/system_prompt.py (Hermes Agent)
-
 import fs from "node:fs";
 import path from "node:path";
 import { type runtime } from "../config/config";
@@ -211,9 +209,3 @@ function truncateContextFile(content: string, filename: string): string {
   return content.slice(0, headChars) + marker + content.slice(content.length - tailChars);
 }
 
-/*
-PORT STATUS
-source path: agent/system_prompt.py
-confidence: high
-status: phase_b_compile
-*/

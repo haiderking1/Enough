@@ -179,7 +179,7 @@ describe("secrets — keyring priority (mocked)", () => {
     // keyring_set success → remove_file is called, we need keyring enabled
     // (HOLLOW_CREDENTIALS_FILE unset). But then active_credentials_path
     // resolves to ~/.config/evenable/credentials, not our temp.
-    // This behavior is verified by the Go test suite; we leave this here
+    // Intended behavior documented here for future coverage:
     // as documentation of the intended behavior:
     // use_keyring() → true → keyring_set(service, account, key) → success
     //     → remove_file() → return nil   ← file is deleted

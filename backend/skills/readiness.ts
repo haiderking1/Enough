@@ -1,5 +1,3 @@
-// PORT: backend/skills/readiness.go
-
 import fs from "node:fs";
 import path from "node:path";
 import { HomeDir } from "./paths";
@@ -246,11 +244,3 @@ export function CheckSkillsRequirements(): boolean {
   return true;
 }
 
-/*
-PORT STATUS
-source path: backend/skills/readiness.go
-source lines: 256
-draft lines: 255
-confidence: high
-status: phase_b_compile
-*/

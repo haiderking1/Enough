@@ -1,5 +1,3 @@
-// PORT: backend/skills/bootstrap.go
-
 import { Effect } from "effect";
 import fs from "node:fs";
 import { HomeDir, SkillsDir } from "./paths";
@@ -37,11 +35,3 @@ export function EnsureBootstrapped(): Effect.Effect<void, never> {
   );
 }
 
-/*
-PORT STATUS
-source path: backend/skills/bootstrap.go
-source lines: 19
-draft lines: 41
-confidence: high
-status: phase_b_compile
-*/

@@ -1,15 +1,14 @@
-// PORT STATUS: active
 // Thin keyring wrapper using the `secret-tool` CLI (libsecret/DBus) on Linux
 // and `security` (Keychain) on macOS.
 //
 // Why CLI instead of keytar (native addon)?
 // keytar requires node-gyp compilation and electron-rebuild for each ABI.
-// secret-tool talks to the SAME libsecret/DBus backend as Go's
-// zalando/go-keyring — zero native deps, works in both `bun` and `electron`
-// without rebuild. Already installed on Arch Linux (libsecret-tools package).
+// secret-tool talks to the same libsecret/DBus backend — zero native deps,
+// works in both `bun` and `electron` without rebuild. Already installed on
+// Arch Linux (libsecret-tools package).
 //
-// Linux attribute names must match go-keyring: service + username (NOT account).
-// See zalando/go-keyring keyring_unix.go — Set/Get use attributes["username"].
+// Linux attribute names use service + username (NOT account), matching libsecret
+// conventions for Set/Get via attributes["username"].
 
 import { spawnSync } from "node:child_process";
 import { Effect } from "effect";
@@ -151,7 +150,7 @@ export const keyring_set = (
 
 /**
  * Delete a secret from the OS keyring. Never fails — errors are silently
- * ignored (matches Go's `_ = keyring.Delete(...)`).
+ * ignored (best-effort cleanup).
  */
 export const keyring_delete = (
   service: string,

@@ -1,5 +1,3 @@
-// PORT: backend/agent/completion.go
-
 import { type obligation } from "./obligations/registry";
 import { type message } from "../opencode/types";
 import { string_content } from "../opencode/types";
@@ -89,11 +87,3 @@ Agent.prototype.currentLockedGoal = function (this: Agent): string {
   return this.lockedGoal;
 };
 
-/*
-PORT STATUS
-source path: backend/agent/completion.go
-source lines: 102
-draft lines: 95
-confidence: high
-status: phase_b_compile
-*/

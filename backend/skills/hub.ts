@@ -1,5 +1,3 @@
-// PORT: backend/skills/hub.go
-
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -1527,11 +1525,3 @@ export function invalidateCache(): void {
   ClearSkillsPromptCache();
 }
 
-/*
-PORT STATUS
-source path: backend/skills/hub.go
-source lines: 1382
-draft lines: 1045
-confidence: high
-status: phase_b_compile
-*/

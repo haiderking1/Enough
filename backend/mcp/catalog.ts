@@ -1,5 +1,3 @@
-// PORT: backend/mcp/catalog.go
-
 import { Effect } from "effect";
 import { type config, type mcp_server_config } from "../config/config";
 import { add_mcp_server, remove_mcp_server } from "../config/mcp_manage";
@@ -144,11 +142,3 @@ export const remove_catalog_entry = (
   );
 };
 
-/*
-PORT STATUS
-source path: backend/mcp/catalog.go
-source lines: 130
-draft lines: 147
-confidence: high
-status: phase_b_compile
-*/

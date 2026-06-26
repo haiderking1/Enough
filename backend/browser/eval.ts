@@ -1,5 +1,3 @@
-// PORT: backend/browser/eval.go
-
 import { Effect } from "effect";
 import { type ClickPlan, type ClickFeedback } from "./click";
 
@@ -191,11 +189,3 @@ export function FormatEvalResultText(result: any): string {
   }
 }
 
-/*
-PORT STATUS
-source path: backend/browser/eval.go
-source lines: 203
-draft lines: 172
-confidence: high
-status: phase_b_compile
-*/

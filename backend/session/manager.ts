@@ -1,5 +1,3 @@
-// PORT: backend/session/manager.go
-
 import { fingerprint_store, new_fingerprint_store } from "./fingerprints";
 import { Effect } from "effect";
 import fs from "node:fs/promises";
@@ -774,10 +772,3 @@ export const start_new = (cwd: string): Effect.Effect<manager, Error> => {
   });
 };
 
-/*
-PORT STATUS
-source path: backend/session/manager.go
-source lines: 709
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/opencode/thinking.go
-
 import { get_reasoning, type chat_request, type message } from "./types";
 import { lookup_catalog_model } from "./providers";
 
@@ -316,11 +314,3 @@ export const format_thinking_level_for_model = (model: string, level: thinking_l
   return format_thinking_label(level);
 };
 
-/*
-PORT STATUS
-source path: backend/opencode/thinking.go
-source lines: 232
-draft lines: 231
-confidence: high
-status: phase_b_compile
-*/

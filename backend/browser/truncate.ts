@@ -1,5 +1,3 @@
-// PORT: backend/browser/truncate.go
-
 export const MaxScrapeBytes = 50 * 1024;
 export const MaxScrapeLines = 2000;
 
@@ -56,11 +54,3 @@ export function truncateStringToBytesFromEnd(str: string, maxBytes: number): str
   return buf.subarray(start).toString("utf-8");
 }
 
-/*
-PORT STATUS
-source path: backend/browser/truncate.go
-source lines: 63
-draft lines: 59
-confidence: high
-status: phase_b_compile
-*/

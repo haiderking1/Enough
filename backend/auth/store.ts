@@ -1,5 +1,3 @@
-// PORT: backend/auth/store.go
-
 import path from "node:path";
 import fs from "node:fs";
 import { Effect } from "effect";
@@ -134,17 +132,3 @@ export const save_codex_provider_state = (
 export const clear_codex_auth = (): Effect.Effect<void, auth_error_type> =>
   save_codex_provider_state(empty_provider_state());
 
-/*
-PORT STATUS
-source path: backend/auth/store.go
-source lines: 101
-draft lines: 143
-confidence: high
-status: phase_a_draft
-todos:
-  - verify ENOENT detection works across Bun and Node error shapes
-  - confirm 0o600/0o700 permission bits are meaningful on target runtime
-notes:
-  - Functions returning (T, error) are modeled as Effect.Effect<T, auth_error>.
-  - Reuses existing home_dir from backend/hollowhome.
-*/

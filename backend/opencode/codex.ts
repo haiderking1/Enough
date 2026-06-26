@@ -1,5 +1,3 @@
-// PORT: backend/opencode/codex.go
-
 import { Effect } from "effect";
 import { codex_cloudflare_headers } from "../auth/codex_headers";
 import { client, client_error } from "./client";
@@ -418,11 +416,3 @@ export const chat_responses_once = (
   });
 };
 
-/*
-PORT STATUS
-source path: backend/opencode/codex.go
-source lines: 398
-draft lines: 382
-confidence: high
-status: phase_b_compile
-*/

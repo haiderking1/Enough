@@ -1,5 +1,3 @@
-// PORT: backend/agent/bash.go
-
 import { Effect } from "effect";
 import { type tool } from "../opencode/types";
 import { Agent, type toolResult } from "./agent";
@@ -361,11 +359,3 @@ export class BashDeltaEmitter {
   }
 }
 
-/*
-PORT STATUS
-source path: backend/agent/bash.go
-source lines: 304
-draft lines: 279
-confidence: high
-status: phase_b_compile
-*/

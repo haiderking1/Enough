@@ -1,5 +1,3 @@
-// PORT: backend/workflow/vm_loop.go
-
 export class vmLoop {
   private activePromisesCount = 0;
 
@@ -80,11 +78,3 @@ export function newVMLoop(): vmLoop {
   return new vmLoop();
 }
 
-/*
-PORT STATUS
-source path: backend/workflow/vm_loop.go
-source lines: 75
-draft lines: 55
-confidence: high
-status: phase_b_compile
-*/

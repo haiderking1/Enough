@@ -1,5 +1,3 @@
-// PORT: backend/session/delete_cwd.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -133,11 +131,3 @@ export const delete_for_cwd = (
   });
 };
 
-/*
-PORT STATUS
-source path: backend/session/delete_cwd.go
-source lines: 26
-draft lines: 29
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/auth/codex_oauth.go
-
 import { Effect } from "effect";
 import { auth_error, type auth_error as auth_error_type } from "./error";
 import {
@@ -364,18 +362,3 @@ const jwt_exp_unix = (token: string): number | null => {
   return claims.exp;
 };
 
-/*
-PORT STATUS
-source path: backend/auth/codex_oauth.go
-source lines: 348
-draft lines: 381
-confidence: medium
-status: phase_a_draft
-todos:
-  - decide whether internal helpers like save_codex_tokens_from_auth_code should be exported
-  - replace Effect.runSync inside async stubs with proper Effect composition
-  - verify poll interval / deadline math matches Go time.Duration behavior
-notes:
-  - Functions returning (T, error) are modeled as Effect.Effect<T, auth_error>.
-  - Uses global fetch for HTTP; AbortSignal replaces Go context.Context.
-*/

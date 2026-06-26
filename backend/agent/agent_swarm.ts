@@ -1,5 +1,3 @@
-// PORT: backend/agent/agent_swarm.go
-
 import { Effect } from "effect";
 import { type tool, type message, type chat_request, string_content, content_string } from "../opencode/types";
 import { Agent, type toolResult, type swarmTask, type swarmWorkerResult, maxSwarmDepth } from "./agent";
@@ -1196,11 +1194,3 @@ function swarmWorkerSection(w: swarmWorkerResult): string {
   return `${header}\n${body}`;
 }
 
-/*
-PORT STATUS
-source path: backend/agent/agent_swarm.go
-source lines: 1103
-draft lines: 750
-confidence: high
-status: phase_b_compile
-*/

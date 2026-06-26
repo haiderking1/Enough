@@ -1,5 +1,3 @@
-// PORT: backend/memory/soul.go
-
 import fs from "node:fs";
 import path from "node:path";
 import { home_dir } from "../hollowhome/home";
@@ -94,9 +92,3 @@ export function LoadSoul(): string {
   return truncateSoulContent(content, soulMaxChars);
 }
 
-/*
-PORT STATUS
-source path: backend/memory/soul.go + agent/prompt_builder.load_soul_md
-confidence: high
-status: phase_b_compile
-*/

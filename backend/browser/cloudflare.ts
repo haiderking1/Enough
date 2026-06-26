@@ -1,5 +1,3 @@
-// PORT: backend/browser/cloudflare.go
-
 import { Effect } from "effect";
 import { type CdpSession, EvaluateExpression } from "./cdp";
 
@@ -126,11 +124,3 @@ export function waitForPageReady(session: CdpSession, timeoutMs: number): Effect
   return poll();
 }
 
-/*
-PORT STATUS
-source path: backend/browser/cloudflare.go
-source lines: 115
-draft lines: 122
-confidence: high
-status: phase_b_compile
-*/

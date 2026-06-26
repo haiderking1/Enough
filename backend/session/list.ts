@@ -1,5 +1,3 @@
-// PORT: backend/session/list.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import fs_sync from "node:fs";
@@ -279,11 +277,3 @@ export const shorten_path = (file_path: string): string => {
   return file_path;
 };
 
-/*
-PORT STATUS
-source path: backend/session/list.go
-source lines: 249
-draft lines: 257
-confidence: high
-status: phase_b_compile
-*/

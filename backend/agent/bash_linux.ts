@@ -1,5 +1,3 @@
-// PORT: backend/agent/bash_linux.go
-
 import { ChildProcess } from "node:child_process";
 import process from "node:process";
 
@@ -25,11 +23,3 @@ export function killProcessGroup(cmd: ChildProcess): Error | null {
   }
 }
 
-/*
-PORT STATUS
-source path: backend/agent/bash_linux.go
-source lines: 34
-draft lines: 27
-confidence: high
-status: phase_b_compile
-*/

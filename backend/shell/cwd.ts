@@ -1,5 +1,3 @@
-// PORT: backend/shell/cwd.go
-
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
@@ -52,15 +50,3 @@ export const resolve_safe_cwd = (cwd: string): string => {
   return os.tmpdir();
 };
 
-/*
-PORT STATUS
-source path: backend/shell/cwd.go
-source lines: 72
-draft lines: 66
-confidence: high
-status: phase_a_draft
-todos:
-  - verify path.dirname behavior on Windows edge cases matches filepath.Dir
-notes:
-  - No (T, error) returns; plain function port.
-*/

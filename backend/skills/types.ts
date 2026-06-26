@@ -1,5 +1,3 @@
-// PORT: backend/skills/types.go
-
 export interface SourceInfo {
   source: string;
   scope?: string;
@@ -83,11 +81,3 @@ export interface SkillManageResult {
   gist?: string;
 }
 
-/*
-PORT STATUS
-source path: backend/skills/types.go
-source lines: 85
-draft lines: 88
-confidence: high
-status: phase_b_compile
-*/

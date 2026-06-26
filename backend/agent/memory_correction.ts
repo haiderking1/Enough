@@ -1,5 +1,3 @@
-// PORT: backend/agent/memory_correction.go
-
 // userMessageSignalsProfileCorrection reports whether the user's message likely
 // corrects how the assistant addressed them or interpreted USER PROFILE text.
 // When true, we force an immediate background memory review so misread profile
@@ -39,11 +37,3 @@ export function userMessageSignalsProfileCorrection(msg: string): boolean {
   return false;
 }
 
-/*
-PORT STATUS
-source path: backend/agent/memory_correction.go
-source lines: 43
-draft lines: 37
-confidence: high
-status: phase_b_compile
-*/

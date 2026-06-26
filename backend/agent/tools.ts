@@ -1,5 +1,3 @@
-// PORT: backend/agent/tools.go
-
 import { Effect } from "effect";
 import { type tool } from "../opencode/types";
 import { type tool_content_block } from "../opencode/content";
@@ -172,11 +170,3 @@ Agent.prototype.toolSkillManage = function (
   );
 };
 
-/*
-PORT STATUS
-source path: backend/agent/tools.go
-source lines: 139
-draft lines: 153
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/session/branch_summarization.go
-
 import { Effect } from "effect";
 import type { message } from "../opencode/types";
 import { string_content, content_string } from "../opencode/types";
@@ -331,10 +329,3 @@ export const generate_branch_summary = (
   );
 };
 
-/*
-PORT STATUS
-source path: backend/session/branch_summarization.go
-source lines: 305
-confidence: high
-status: phase_b_compile
-*/

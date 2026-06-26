@@ -1,5 +1,3 @@
-// PORT: backend/shell/resolve.go
-
 import fs from "node:fs";
 import path from "node:path";
 import { Effect } from "effect";
@@ -99,16 +97,3 @@ export const resolve_bash = (): Effect.Effect<string, shell_error> =>
     ));
   });
 
-/*
-PORT STATUS
-source path: backend/shell/resolve.go
-source lines: 118
-draft lines: 114
-confidence: high
-status: phase_a_draft
-todos:
-  - verify Windows PATH executable lookup semantics match exec.LookPath exactly
-notes:
-  - ResolveBash returns (string, error), modeled as Effect.Effect<string, shell_error>.
-  - Reuses config.load and hollowhome portable_git_dir ports.
-*/

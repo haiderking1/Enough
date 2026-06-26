@@ -1,5 +1,3 @@
-// PORT: backend/agent/bash_windows.go
-
 import { ChildProcess, spawnSync } from "node:child_process";
 
 // configureProcGroup is a no-op on Node.js after process is spawned,
@@ -31,11 +29,3 @@ export function killProcessGroup(cmd: ChildProcess): Error | null {
   }
 }
 
-/*
-PORT STATUS
-source path: backend/agent/bash_windows.go
-source lines: 47
-draft lines: 32
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/browser/tool.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -475,11 +473,3 @@ export function scrape_url(
   );
 }
 
-/*
-PORT STATUS
-source path: backend/browser/tool.go
-source lines: 469
-draft lines: 421
-confidence: high
-status: phase_b_compile
-*/

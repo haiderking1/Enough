@@ -1,5 +1,3 @@
-// PORT: backend/agent/bash_sanitize.go
-
 const bashBlockedPatterns = [
   { re: /\bmpv\b/i, hint: "mpv draws video/sixel into stdout and breaks the Hollow TUI" },
   { re: /--vo=(sixel|tct|caca|kitty)/i, hint: "terminal video output cannot run inside Hollow" },
@@ -159,11 +157,3 @@ function stripOrphanTerminalLeaks(inStr: string): string {
   return inStr;
 }
 
-/*
-PORT STATUS
-source path: backend/agent/bash_sanitize.go
-source lines: 156
-draft lines: 147
-confidence: high
-status: phase_b_compile
-*/

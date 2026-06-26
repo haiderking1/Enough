@@ -1,5 +1,5 @@
 // Cross-platform process-tree kill + detached-pid tracking.
-// PORT: mirrors Flame's packages/coding-agent/src/utils/shell.ts tracking +
+
 // killProcessTree. Detached children are tracked so they can be reaped on agent
 // abort / backend shutdown; killProcessTree kills the whole group on Unix
 // (negative pid) and uses taskkill /T on Windows.

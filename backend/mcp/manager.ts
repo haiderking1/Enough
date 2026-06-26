@@ -1,5 +1,3 @@
-// PORT: backend/mcp/manager.go
-
 import { Effect } from "effect";
 import { spawn, type ChildProcess } from "node:child_process";
 import { type config, type mcp_server_config, type mcp_server_tools_config } from "../config/config";
@@ -613,11 +611,3 @@ export const is_tool_allowed = (name: string, filter?: mcp_server_tools_config):
   return true;
 };
 
-/*
-PORT STATUS
-source path: backend/mcp/manager.go
-source lines: 464
-draft lines: 494
-confidence: high
-status: phase_b_compile
-*/

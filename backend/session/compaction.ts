@@ -1,5 +1,3 @@
-// PORT: backend/session/compaction.go
-
 import { Effect } from "effect";
 import type { message } from "../opencode/types";
 import { string_content, content_string } from "../opencode/types";
@@ -515,10 +513,3 @@ export const compact = (
   }
 };
 
-/*
-PORT STATUS
-source path: backend/session/compaction.go
-source lines: 447
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/agent/obligations/registry.go
-
 import { command_matches_any } from "./match";
 
 export type kind = string;
@@ -230,16 +228,3 @@ export class registry {
   }
 }
 
-/*
-PORT STATUS
-source path: backend/agent/obligations/registry.go
-source lines: 237
-draft lines: 245
-confidence: high
-status: phase_a_draft
-todos:
-  - confirm Date(0) is an acceptable stand-in for Go's zero time.Time
-  - verify shallow copies ({ ...ob }) are sufficient for obligation immutability
-notes:
-  - No (T, error) returns; class method port.
-*/

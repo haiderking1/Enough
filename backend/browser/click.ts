@@ -1,5 +1,3 @@
-// PORT: backend/browser/click.go
-
 import { Effect } from "effect";
 import { type CdpSession, EvaluateExpression } from "./cdp";
 
@@ -229,11 +227,3 @@ export function clickElementWithFeedback(
   );
 }
 
-/*
-PORT STATUS
-source path: backend/browser/click.go
-source lines: 240
-draft lines: 211
-confidence: high
-status: phase_b_compile
-*/

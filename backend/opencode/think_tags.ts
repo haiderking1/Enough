@@ -1,5 +1,3 @@
-// PORT: backend/opencode/think_tags.go
-
 import { get_reasoning, string_content, content_string, type message } from "./types";
 
 const think_open_tags = [
@@ -215,11 +213,3 @@ export class think_stream_splitter {
   }
 }
 
-/*
-PORT STATUS
-source path: backend/opencode/think_tags.go
-source lines: 216
-draft lines: 182
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/browser/cdp.go
-
 import { Effect } from "effect";
 import {
   should_auto_launch_browser,
@@ -479,11 +477,3 @@ export function EvaluateExpression(
   );
 }
 
-/*
-PORT STATUS
-source path: backend/browser/cdp.go
-source lines: 500
-draft lines: 406
-confidence: high
-status: phase_b_compile
-*/

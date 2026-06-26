@@ -1,5 +1,3 @@
-// PORT: backend/opencode/codex_stream.go
-
 import { Effect } from "effect";
 import { codex_cloudflare_headers } from "../auth/codex_headers";
 import { client, client_error, stream_status_error } from "./client";
@@ -304,11 +302,3 @@ export const message_from_codex_stream_state = (state: codex_stream_state): mess
   return msg;
 };
 
-/*
-PORT STATUS
-source path: backend/opencode/codex_stream.go
-source lines: 238
-draft lines: 472
-confidence: high
-status: phase_b_compile
-*/

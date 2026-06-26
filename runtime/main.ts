@@ -1,8 +1,3 @@
-// PORT STATUS: active
-// source path: runtime/main.ts
-// confidence: high
-// status: phase_b_compile
-
 import { Effect, Fiber, Stream, Deferred } from "effect";
 import { AgentRuntimeImpl } from "./agent_runtime";
 import { DesktopBridge } from "./desktop_bridge";

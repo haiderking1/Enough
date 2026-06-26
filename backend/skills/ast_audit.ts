@@ -1,5 +1,3 @@
-// PORT: backend/skills/ast_audit.go
-
 import { Effect } from "effect";
 import fs from "node:fs";
 import path from "node:path";
@@ -119,7 +117,7 @@ export function ASTScanPath(filePath: string): Effect.Effect<ASTFinding[], Error
             if (!rel) {
               rel = path.basename(full);
             }
-            // Normalize separator to slash like Go's filepath.ToSlash
+            // Normalize separator to forward slashes
             const relSlash = rel.split(path.sep).join("/");
             try {
               const data = fs.readFileSync(full, "utf8");
@@ -169,11 +167,3 @@ export function FormatASTReport(findings: ASTFinding[], skillName: string): stri
   return lines.join("\n");
 }
 
-/*
-PORT STATUS
-source path: backend/skills/ast_audit.go
-source lines: 168
-draft lines: 167
-confidence: high
-status: phase_b_compile
-*/

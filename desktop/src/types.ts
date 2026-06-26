@@ -1,4 +1,4 @@
-// ── Chat / transcript types (ported from the reference design) ──────────────
+// ── Chat / transcript types ─────────────────────────────────────────────────
 
 export type Role = "user" | "assistant"
 

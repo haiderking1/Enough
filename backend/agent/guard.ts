@@ -408,11 +408,3 @@ export function toolPathArg(argsJSON: string): [string, boolean] {
   return [args.path, true];
 }
 
-/*
-PORT STATUS
-source path: backend/agent/guard.go
-source lines: 328
-draft lines: 405
-confidence: high
-status: phase_b_compile
-*/

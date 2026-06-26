@@ -1,5 +1,3 @@
-// PORT: backend/agent/web_fetch.go
-
 import { Effect } from "effect";
 import { type tool } from "../opencode/types";
 import { Agent, type toolResult } from "./agent";
@@ -69,11 +67,3 @@ Agent.prototype.toolWebFetch = function (
   );
 };
 
-/*
-PORT STATUS
-source path: backend/agent/web_fetch.go
-source lines: 63
-draft lines: 66
-confidence: high
-status: phase_b_compile
-*/

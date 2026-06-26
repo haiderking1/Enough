@@ -1,5 +1,3 @@
-// PORT: backend/skills/tool_list.go
-
 import { type runtime } from "../config/config";
 import { type Skill } from "./types";
 import { SkillsDir } from "./paths";
@@ -89,11 +87,3 @@ export function ExecuteSkillsList(
   );
 }
 
-/*
-PORT STATUS
-source path: backend/skills/tool_list.go
-source lines: 85
-draft lines: 88
-confidence: high
-status: phase_b_compile
-*/

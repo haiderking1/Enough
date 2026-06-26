@@ -1,5 +1,3 @@
-// PORT: backend/plugins/registry.go
-
 import fs from "node:fs";
 import path from "node:path";
 import { Effect } from "effect";
@@ -106,16 +104,3 @@ export const get_plugin_sibling_banner = (namespace: string, bare: string): stri
   return `[Bundle context: This skill is part of the '${namespace}' plugin.]\n\n`;
 };
 
-/*
-PORT STATUS
-source path: backend/plugins/registry.go
-source lines: 96
-draft lines: 121
-confidence: high
-status: phase_a_draft
-todos:
-  - decide whether list_plugin_skills should remain Effect<never> or plain string[]
-notes:
-  - FindPluginSkill returns (string, error), modeled as Effect.Effect<string, plugins_error>.
-  - Reuses config runtime type and hollowhome home_dir port.
-*/

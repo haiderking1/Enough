@@ -1,5 +1,3 @@
-// PORT: backend/session/paths.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -59,11 +57,3 @@ export const session_dir = (cwd: string): Effect.Effect<string, Error> => {
   );
 };
 
-/*
-PORT STATUS
-source path: backend/session/paths.go
-source lines: 46
-draft lines: 51
-confidence: high
-status: phase_b_compile
-*/

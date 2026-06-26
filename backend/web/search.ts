@@ -1,5 +1,3 @@
-// PORT: backend/web/search.go
-
 import { Effect } from "effect";
 import {
   type search_result,
@@ -93,10 +91,3 @@ export const format_pages = (hits: page_hit[]): string => {
   return out;
 };
 
-/*
-PORT STATUS
-source path: backend/web/search.go
-source lines: 86
-confidence: high
-status: phase_b_compile
-*/

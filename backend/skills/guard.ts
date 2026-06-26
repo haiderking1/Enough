@@ -1,5 +1,3 @@
-// PORT: backend/skills/guard.go
-
 import fs from "node:fs";
 import path from "node:path";
 import { type SkillGuardFinding, type SkillScanResult } from "./types";
@@ -443,11 +441,3 @@ export function SecurityScanSkillDir(skillDir: string, guardEnabled: boolean): s
   return "";
 }
 
-/*
-PORT STATUS
-source path: backend/skills/guard.go
-source lines: 415
-draft lines: 416
-confidence: high
-status: phase_b_compile
-*/

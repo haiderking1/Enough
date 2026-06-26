@@ -1,5 +1,3 @@
-// PORT: backend/imageutil/resize.go
-
 import { Effect } from "effect";
 
 export const max_bytes = Math.floor(4.5 * 1024 * 1024);
@@ -171,19 +169,3 @@ export const format_dimension_note = (
   return `[Image: original ${original_width}x${original_height}, displayed at ${width}x${height}. Multiply coordinates by ${scale.toFixed(2)} to map to original image.]`;
 };
 
-/*
-PORT STATUS
-source path: backend/imageutil/resize.go
-source lines: 156
-draft lines: 189
-confidence: medium
-status: phase_a_draft
-todos:
-  - replace decode_image stub with real PNG/JPEG/GIF/WEBP decoder
-  - replace encode_png / encode_jpeg stubs with real encoders
-  - implement bilinear scaling instead of using decoded_img as-is
-  - decide whether to keep ImageData as the internal image representation
-notes:
-  - ResizeImage returns (T, error) in Go, modeled as Effect.Effect<resize_image_result, image_error>.
-  - Original size/b64 limit logic preserved; only codec calls are stubbed.
-*/

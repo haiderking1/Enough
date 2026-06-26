@@ -1,6 +1,3 @@
-// PORT: backend/secrets/store.go
-// backend/secrets/store.go
-
 import path from "node:path";
 import fs from "node:fs";
 import { Effect } from "effect";
@@ -199,23 +196,3 @@ const remove_file = (provider?: string): Effect.Effect<void, secrets_error> =>
     );
   });
 
-/*
-PORT STATUS
-source path: backend/secrets/store.go
-source lines: 145
-draft lines: 180
-confidence: high
-status: phase_b_compile
-todos:
-  - [DONE] replace keyring stubs with real OS keyring bindings
-  - normalize ENOENT detection across Node/Bun error shapes
-  - decide whether owner_unix should be selected at build time for non-Unix targets
-notes:
-  - Functions returning (T, error) in Go are modeled as Effect.Effect<T, secrets_error>.
-  - File permission bits (0o700/0o600) preserved as in Go.
-  - Keyring: uses secret-tool CLI (libsecret/DBus) on Linux, security CLI on macOS.
-    No native addons — works in both `bun` and `electron` without rebuild.
-    Talks to the same secret service as Go's zalando/go-keyring.
-    See backend/secrets/keyring.ts for implementation.
-  - Keyring failures silently fall through to file path (matches Go semantics).
-*/

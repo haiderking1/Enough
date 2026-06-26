@@ -1,5 +1,3 @@
-// PORT: backend/opencode/models.go
-
 import { Effect } from "effect";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
@@ -449,11 +447,3 @@ export const supports_images = (model: string): boolean => {
   return resolve_supports_images(model, provider_opencode);
 };
 
-/*
-PORT STATUS
-source path: backend/opencode/models.go
-source lines: 450
-draft lines: 440
-confidence: high
-status: phase_b_compile
-*/

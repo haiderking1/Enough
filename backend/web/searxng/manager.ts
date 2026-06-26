@@ -1,5 +1,3 @@
-// PORT: backend/web/searxng/manager.go
-
 import path from "node:path";
 import fs from "node:fs";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -366,19 +364,3 @@ const look_path = (name: string): string | null => {
   return null;
 };
 
-/*
-PORT STATUS
-source path: backend/web/searxng/manager.go
-source lines: 300
-draft lines: 377
-confidence: medium
-status: phase_a_draft
-todos:
-  - embed real settings.yml instead of placeholder
-  - replace sync spawn helpers with async Effect wrappers if UI responsiveness matters
-  - verify process kill/wait behavior matches Go's SIGTERM + 5s fallback
-  - consider AbortController cleanup edge cases when ctx fires after completion
-notes:
-  - Methods returning (T, error) are wrapped in Effect.Effect<T, searxng_error>.
-  - state.go logic is consumed through write_state/read_state helpers.
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/agent/edit_file.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import { type tool } from "../opencode/types";
@@ -248,11 +246,3 @@ export function computeDiff(originalContent: string, newContent: string): string
   return diffLines.join("\n");
 }
 
-/*
-PORT STATUS
-source path: backend/agent/edit_file.go
-source lines: 84
-draft lines: 99
-confidence: high
-status: phase_b_compile
-*/

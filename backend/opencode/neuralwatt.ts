@@ -1,5 +1,3 @@
-// PORT: backend/opencode/neuralwatt.go
-
 import { Effect } from "effect";
 
 export type neuralwatt_quota_response = {
@@ -47,15 +45,3 @@ export const neuralwatt_account_summary = (
     catch: (cause) => cause instanceof Error ? cause : new Error(String(cause)),
   });
 
-/*
-PORT STATUS
-source path: backend/opencode/neuralwatt.go
-source lines: 118
-draft lines: 84
-confidence: high
-status: phase_a_draft
-todos:
-  - verify response field casing against live NeuralWatt quota endpoint
-notes:
-  - NeuralWattAccountSummary returns (string, error), modeled as Effect.Effect<string, Error>.
-*/

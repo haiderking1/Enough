@@ -241,11 +241,3 @@ export function truncateForError(s: string): string {
   return s;
 }
 
-/*
-PORT STATUS
-source path: backend/agent/verifier.go
-source lines: 220
-draft lines: 251
-confidence: high
-status: phase_b_compile
-*/

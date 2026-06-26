@@ -1,5 +1,3 @@
-// PORT: backend/shell/command.go
-
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { Effect } from "effect";
@@ -76,15 +74,3 @@ export const git_root_from_bash_exe = (bash_abs: string): string => {
   return great;
 };
 
-/*
-PORT STATUS
-source path: backend/shell/command.go
-source lines: 93
-draft lines: 82
-confidence: high
-status: phase_a_draft
-todos:
-  - wire AbortSignal cancellation to spawned child lifecycle if needed
-notes:
-  - CommandContext returns (*exec.Cmd, error), modeled as Effect.Effect<ChildProcess, shell_error>.
-*/

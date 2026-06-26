@@ -1,5 +1,3 @@
-// PORT: backend/skills/environment.go
-
 import fs from "node:fs";
 
 const knownEnvironments: Record<string, boolean> = {
@@ -116,11 +114,3 @@ export function SkillMatchesEnvironment(fm: Record<string, any>): boolean {
   return false;
 }
 
-/*
-PORT STATUS
-source path: backend/skills/environment.go
-source lines: 104
-draft lines: 105
-confidence: high
-status: phase_b_compile
-*/

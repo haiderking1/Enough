@@ -1,4 +1,3 @@
-// PORT: backend/skills/discovery.go
 import fs from "node:fs";
 import path from "node:path";
 import { type runtime } from "../config/config";
@@ -604,11 +603,3 @@ export function LoadSkillsFromDirs(
   return [allSkills, allDiagnostics];
 }
 
-/*
-PORT STATUS
-source path: backend/skills/discovery.go
-source lines: 516
-draft lines: 550
-confidence: high
-status: phase_b_compile
-*/

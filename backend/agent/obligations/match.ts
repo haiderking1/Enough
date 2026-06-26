@@ -1,5 +1,3 @@
-// PORT: backend/agent/obligations/match.go
-
 const curl_cmd_re = /\bcurl(?:\s+-[\w-]+)*\s+https?:\/\/[^\s"'`]+/gi;
 
 export const extract_task_verify_commands = (prompt: string): string[] => {
@@ -107,15 +105,3 @@ export const extract_curl_url = (command: string): string => {
   return "";
 };
 
-/*
-PORT STATUS
-source path: backend/agent/obligations/match.go
-source lines: 97
-draft lines: 121
-confidence: high
-status: phase_b_compile
-todos:
-  - confirm the RegExp flag (?i) matches Go's case-insensitive matching
-notes:
-  - No (T, error) returns; plain function port.
-*/

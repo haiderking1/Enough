@@ -1,5 +1,3 @@
-// PORT: backend/opencode/sse.go
-
 import { Effect } from "effect";
 
 // ErrSSEDone signals the consumer should stop reading SSE data.
@@ -66,15 +64,3 @@ export const parse_sse_block = (block_text: string): sse_block => {
   return { event_type, data, done: data === "[DONE]" };
 };
 
-/*
-PORT STATUS
-source path: backend/opencode/sse.go
-source lines: 108
-draft lines: 80
-confidence: medium
-status: phase_a_draft
-todos:
-  - adapt for true streaming ReadableStream when client files are ported
-notes:
-  - forEachSSEBlock returns error in Go; modeled as Effect.Effect<void, Error>.
-*/

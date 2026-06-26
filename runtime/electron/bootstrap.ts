@@ -1,4 +1,3 @@
-// PORT STATUS: active
 // Boots the hollow runtime in the Electron main process.
 // Agent NEVER leaves main — the renderer talks IPC only.
 

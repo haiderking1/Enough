@@ -16,7 +16,6 @@ dist/
 # Hollow runtime data in project dirs
 .hollow/
 
-# Go tooling (legacy)
 coverage.out
 coverage.html
 *.prof

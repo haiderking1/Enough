@@ -1,5 +1,3 @@
-// PORT: backend/approval/write_approval.go
-
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -387,17 +385,3 @@ const walk_dirs = (root: string, fn: (p: string, info: fs.Dirent) => boolean): v
   }
 };
 
-/*
-PORT STATUS
-source path: backend/approval/write_approval.go
-source lines: 411
-draft lines: 403
-confidence: high
-status: phase_a_draft
-todos:
-  - verify directory walk early-stop behavior matches filepath.Walk + io.EOF exactly
-  - confirm JSON.stringify formatting is acceptable equivalent to json.MarshalIndent
-notes:
-  - Functions returning (T, error) use Effect.Effect<T, approval_error>.
-  - Reuses existing hollowhome and config runtime types.
-*/

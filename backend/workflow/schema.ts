@@ -1,5 +1,3 @@
-// PORT: backend/workflow/schema.go
-
 import { Effect } from "effect";
 import Ajv from "ajv";
 
@@ -83,11 +81,3 @@ export function parseAndValidateJSON(
   });
 }
 
-/*
-PORT STATUS
-source path: backend/workflow/schema.go
-source lines: 64
-draft lines: 90
-confidence: high
-status: phase_b_compile
-*/

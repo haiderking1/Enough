@@ -1,8 +1,3 @@
-// PORT STATUS: active
-// source path: runtime/agent_runtime.ts
-// confidence: high
-// status: phase_b_compile
-
 import path from "node:path";
 import { Effect, Context, PubSub } from "effect";
 // Single registration barrel — attaches all Agent prototype methods and

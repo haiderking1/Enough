@@ -1,5 +1,3 @@
-// PORT: backend/agent/coding_context.go
-
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -137,11 +135,3 @@ export function ShouldDemoteCategory(cat: string, isCoding: boolean, configMode:
   return !!NonCodingCategories[parts[0]];
 }
 
-/*
-PORT STATUS
-source path: backend/agent/coding_context.go
-source lines: 146
-draft lines: 133
-confidence: high
-status: phase_b_compile
-*/

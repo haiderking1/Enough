@@ -1,5 +1,3 @@
-// PORT: backend/agent/prompt.go
-
 import { type runtime } from "../config/config";
 import { DiscoverAllSkills } from "../skills/discovery";
 import { FormatSkillsForPrompt } from "../skills/format";
@@ -64,9 +62,8 @@ export const defaultIdentityStable =
 export const systemPrompt = defaultIdentityStable;
 
 // BuildSystemPrompt is the per-call prompt builder used by swarm workers and
-// other ephemeral roles. The main agent uses BuildSessionSystemPrompt (see
-// system_prompt.go), which layers SOUL.md, memory and the volatile tier on
-// top and is cached per session.
+// other ephemeral roles. The main agent uses BuildSessionSystemPrompt, which layers
+// SOUL.md, memory and the volatile tier on top and is cached per session.
 export function BuildSystemPrompt(
   workDir: string,
   cfg: runtime,
@@ -114,11 +111,3 @@ export function hasSkillManage(toolNames: string[]): boolean {
   return false;
 }
 
-/*
-PORT STATUS
-source path: backend/agent/prompt.go
-source lines: 98
-draft lines: 119
-confidence: high
-status: phase_b_compile
-*/

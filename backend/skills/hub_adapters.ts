@@ -1,5 +1,3 @@
-// PORT: backend/skills/hub_adapters.go
-
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -1857,11 +1855,3 @@ function md5Hash(val: string): string {
   return crypto.createHash("md5").update(val).digest("hex");
 }
 
-/*
-PORT STATUS
-source path: backend/skills/hub_adapters.go
-source lines: 1961
-draft lines: 1475
-confidence: high
-status: phase_b_compile
-*/

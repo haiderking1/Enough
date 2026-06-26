@@ -1,5 +1,3 @@
-// PORT: backend/agent/goal_lock.go
-
 import { runtime_notice_prefix } from "../core/events";
 
 export function goalLockNotice(lockedGoal: string): string {
@@ -23,11 +21,3 @@ export function goalLockReminder(lockedGoal: string): string {
   return "\nGOAL LOCK: " + lockedGoal;
 }
 
-/*
-PORT STATUS
-source path: backend/agent/goal_lock.go
-source lines: 36
-draft lines: 25
-confidence: high
-status: phase_b_compile
-*/

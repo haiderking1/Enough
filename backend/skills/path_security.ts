@@ -1,5 +1,3 @@
-// PORT: backend/skills/path_security.go
-
 import path from "node:path";
 
 export function hasTraversalComponent(filePath: string): boolean {
@@ -44,11 +42,3 @@ export function validateWithinDir(targetPath: string, baseDir: string): string {
   }
 }
 
-/*
-PORT STATUS
-source path: backend/skills/path_security.go
-source lines: 50
-draft lines: 45
-confidence: high
-status: phase_b_compile
-*/

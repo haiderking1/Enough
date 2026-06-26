@@ -1,5 +1,3 @@
-// PORT: backend/web/extract.go
-
 import { Effect } from "effect";
 import {
   type page_hit,
@@ -413,10 +411,3 @@ export const extract_page_content = (
   ];
 };
 
-/*
-PORT STATUS
-source path: backend/web/extract.go
-source lines: 267
-confidence: high
-status: phase_b_compile
-*/

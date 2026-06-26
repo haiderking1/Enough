@@ -1,5 +1,3 @@
-// PORT: backend/workflow/types.go
-
 export const DefaultMaxConcurrency = 16;
 export const DefaultMaxTotalAgents = 1000;
 
@@ -117,11 +115,3 @@ export function cloneJSON<T>(v: T): T {
   return JSON.parse(JSON.stringify(v));
 }
 
-/*
-PORT STATUS
-source path: backend/workflow/types.go
-source lines: 128
-draft lines: 130
-confidence: high
-status: phase_b_compile
-*/

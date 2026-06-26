@@ -1,5 +1,3 @@
-// PORT: backend/agent/bash_other.go
-
 import { ChildProcess } from "node:child_process";
 
 // configureProcGroup is a no-op on Node.js after process is spawned,
@@ -20,11 +18,3 @@ export function killProcessGroup(cmd: ChildProcess): Error | null {
   }
 }
 
-/*
-PORT STATUS
-source path: backend/agent/bash_other.go
-source lines: 19
-draft lines: 21
-confidence: high
-status: phase_b_compile
-*/

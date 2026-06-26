@@ -1,5 +1,3 @@
-// PORT: backend/web/provider.go
-
 import { Effect } from "effect";
 import { type provider } from "./types";
 import { ensure_running, stop as searxng_stop } from "./searxng/manager";
@@ -26,10 +24,3 @@ export const new_search_provider = (ctx: AbortSignal): Effect.Effect<provider, E
   );
 };
 
-/*
-PORT STATUS
-source path: backend/web/provider.go
-source lines: 26
-confidence: high
-status: phase_b_compile
-*/

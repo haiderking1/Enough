@@ -1,5 +1,3 @@
-// PORT: backend/auth/codex_headers.go
-
 // CodexCloudflareHeaders returns headers required for chatgpt.com/backend-api/codex.
 export const codex_cloudflare_headers = (access_token: string): Record<string, string> => {
   const headers: Record<string, string> = {
@@ -43,15 +41,3 @@ export const codex_cloudflare_headers = (access_token: string): Record<string, s
   return headers;
 };
 
-/*
-PORT STATUS
-source path: backend/auth/codex_headers.go
-source lines: 43
-draft lines: 57
-confidence: high
-status: phase_a_draft
-todos:
-  - confirm base64url fallback ordering matches Go's RawURLEncoding + URLEncoding
-notes:
-  - No (T, error) returns; pure function port.
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/web/searxng.go
-
 import { Effect } from "effect";
 import {
   type provider,
@@ -148,10 +146,3 @@ export const classify_search_error = (err: Error): Error => {
   return err;
 };
 
-/*
-PORT STATUS
-source path: backend/web/searxng.go
-source lines: 149
-confidence: high
-status: phase_b_compile
-*/

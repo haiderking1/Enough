@@ -286,13 +286,3 @@ export const minimax_fallback_ids = [
   "MiniMax-M2",
 ];
 
-/*
-PORT STATUS
-new file
-confidence: medium
-status: phase_a_draft
-notes:
-  - Cascading resolver: catalog -> heuristic -> user overrides.
-  - Keeps only small provider fallback slug lists for offline resilience.
-  - User overrides file: ~/.hollow/models.json (partial model_info per id).
-*/

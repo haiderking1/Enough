@@ -1,5 +1,3 @@
-// PORT: backend/auth/connect.go
-
 import { Effect } from "effect";
 import { auth_error, type auth_error as auth_error_type } from "./error";
 import { set_api_key, has_api_key as secrets_has_api_key } from "../secrets/store";
@@ -35,16 +33,3 @@ export const add_openai_codex = (
   ctx: AbortSignal,
 ): Effect.Effect<device_auth_start, auth_error_type> => complete_codex_device_login(ctx);
 
-/*
-PORT STATUS
-source path: backend/auth/connect.go
-source lines: 31
-draft lines: 50
-confidence: high
-status: phase_a_draft
-todos:
-  - mapError for secrets errors may want more granular reason strings
-notes:
-  - Connect/SaveAPIKey/AddOpenAICodex functions returning (error) are Effect effects.
-  - Imports existing secrets and codex_oauth ports to avoid duplication.
-*/

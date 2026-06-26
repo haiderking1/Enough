@@ -1,5 +1,3 @@
-// PORT: backend/config/provider.go
-
 import { Effect } from "effect";
 import { config_error, type config_error as config_error_type } from "./error";
 import {
@@ -25,7 +23,7 @@ import { save_api_key as auth_save_api_key } from "../auth/connect";
 import { has_api_key as secrets_has_api_key, err_not_connected } from "../secrets/store";
 import { has_codex_auth as auth_has_codex_auth, codex_default_base_url_fn } from "../auth/codex_oauth";
 
-// EnableOpenCodeProvider stores an API key and switches the active provider to Go.
+// EnableOpenCodeProvider stores an API key and switches the active provider to OpenCode Go.
 export const enable_opencode_provider = (
   key: string,
 ): Effect.Effect<void, config_error_type> =>
@@ -261,16 +259,3 @@ const asError = (e: unknown): Error => {
   return new Error(typeof e === "string" && e ? e : "unknown error");
 };
 
-/*
-PORT STATUS
-source path: backend/config/provider.go
-source lines: 141
-draft lines: 206
-confidence: medium
-status: phase_a_draft
-todos:
-  - mapError for auth/secrets failures could carry more specific context
-notes:
-  - Functions returning (T, error) in Go are modeled as Effect.Effect<T, config_error>.
-  - Reuses existing auth/secrets/config ports.
-*/

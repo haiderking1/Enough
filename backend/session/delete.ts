@@ -1,5 +1,3 @@
-// PORT: backend/session/delete.go
-
 import { Effect } from "effect";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
@@ -92,11 +90,3 @@ export const delete_session = (session_path: string): Effect.Effect<delete_resul
   });
 };
 
-/*
-PORT STATUS
-source path: backend/session/delete.go
-source lines: 48
-draft lines: 72
-confidence: high
-status: phase_b_compile
-*/

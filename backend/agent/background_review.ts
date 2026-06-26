@@ -515,11 +515,3 @@ export function summarizeReviewActions(reviewMessages: message[]): string[] {
   return actions;
 }
 
-/*
-PORT STATUS
-source path: backend/agent/background_review.go
-source lines: 546
-draft lines: 470
-confidence: high
-status: phase_b_compile
-*/

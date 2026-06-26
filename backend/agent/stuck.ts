@@ -1,5 +1,3 @@
-// PORT: backend/agent/stuck.go
-
 import { Agent } from "./agent";
 import { type message, string_content } from "../opencode/types";
 import { parallel_forks_enabled, stuck_threshold, fork_count } from "../config/config";
@@ -68,11 +66,3 @@ Agent.prototype.maybeParallelForks = async function (this: Agent): Promise<void>
   this.persist(inject);
 };
 
-/*
-PORT STATUS
-source path: backend/agent/stuck.go
-source lines: 77
-draft lines: 77
-confidence: high
-status: phase_b_compile
-*/

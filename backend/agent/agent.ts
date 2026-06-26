@@ -1,5 +1,3 @@
-// PORT: backend/agent/agent.go
-
 import { Effect } from "effect";
 import { type message, type tool, string_content, content_string, get_reasoning, type chat_request } from "../opencode/types";
 import { type tool_content_block, tool_content_from_agent } from "../opencode/content";
@@ -608,7 +606,7 @@ export class Agent {
     return this.mcpManager;
   }
 
-  // --- Emit helpers (ported from agent.go:845–935) ---
+  // --- Emit helpers ---
 
   streamStart(): void {
     if (this.emit !== null) {
@@ -658,7 +656,7 @@ export class Agent {
     }
   }
 
-  // --- Main inference loop (ported from agent.go:601–843) ---
+  // --- Main inference loop ---
 
   async runLoop(ctx: AbortSignal): Promise<void> {
     this.turnCtx = ctx;
@@ -1110,11 +1108,3 @@ Agent.prototype.Prompt = async function (
 };
 
 
-/*
-PORT STATUS
-source path: backend/agent/agent.go
-source lines: 1006
-draft lines: 1113
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/agent/read_file.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import { type tool } from "../opencode/types";
@@ -131,11 +129,3 @@ Agent.prototype.toolReadFile = function (
   );
 };
 
-/*
-PORT STATUS
-source path: backend/agent/read_file.go
-source lines: 113
-draft lines: 118
-confidence: high
-status: phase_b_compile
-*/

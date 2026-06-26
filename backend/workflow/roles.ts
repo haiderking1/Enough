@@ -1,5 +1,3 @@
-// PORT: backend/workflow/roles.go
-
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,11 +27,3 @@ export function roleTemplate(role: string): string {
   }
 }
 
-/*
-PORT STATUS
-source path: backend/workflow/roles.go
-source lines: 24
-draft lines: 28
-confidence: high
-status: phase_b_compile
-*/

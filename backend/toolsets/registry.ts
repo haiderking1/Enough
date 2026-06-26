@@ -1,6 +1,3 @@
-// PORT: backend/toolsets/registry.go
-// backend/toolsets/registry.go
-
 // Maps each tool name to its toolset category.
 export const tool_to_toolset: Record<string, string> = {
   read_file: "file",
@@ -32,15 +29,3 @@ export const get_available_toolsets = (active_tools: string[]): string[] => {
   return Array.from(seen).sort();
 };
 
-/*
-PORT STATUS
-source path: backend/toolsets/registry.go
-source lines: 39
-draft lines: 45
-confidence: high
-status: phase_a_draft
-todos:
-  - verify Record<string, string> is the desired strictness (could use const/readonly later)
-notes:
-  - Pure data + pure function port; no Effect types needed because there is no (T, error) return.
-*/

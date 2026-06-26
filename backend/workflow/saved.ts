@@ -1,5 +1,3 @@
-// PORT: backend/workflow/saved.go
-
 import { Effect } from "effect";
 import fs from "node:fs";
 import path from "node:path";
@@ -118,11 +116,3 @@ export function SaveWorkflow(
   });
 }
 
-/*
-PORT STATUS
-source path: backend/workflow/saved.go
-source lines: 88
-draft lines: 113
-confidence: high
-status: phase_b_compile
-*/

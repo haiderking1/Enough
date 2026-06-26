@@ -1,5 +1,3 @@
-// PORT: backend/config/config.go
-
 import path from "node:path";
 import fs from "node:fs";
 import { Effect } from "effect";
@@ -543,18 +541,3 @@ export const connected = (): Effect.Effect<boolean, never> =>
     return yield* secrets_has_api_key(provider);
   });
 
-/*
-PORT STATUS
-source path: backend/config/config.go
-source lines: 768
-draft lines: 555
-confidence: medium
-status: phase_a_draft
-todos:
-  - verify migration fallback behavior matches Go exactly (old config path)
-  - confirm runtime.GOOS mapping to process.platform
-  - tighten Effect.mapError wrappers to preserve original error context
-notes:
-  - Load/Save/LoadRuntime/Connected use Effect.Effect with config_error.
-  - Imports existing auth, secrets, and hollowhome ports.
-*/

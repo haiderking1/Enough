@@ -1,5 +1,3 @@
-// PORT: backend/skills/frontmatter.go
-
 import path from "node:path";
 import { PlatformMap, PromptIndexDescriptionMax } from "./constants";
 import { type SkillConditions, type SkillSnapshotEntry } from "./types";
@@ -387,11 +385,3 @@ export function buildSnapshotEntry(
   };
 }
 
-/*
-PORT STATUS
-source path: backend/skills/frontmatter.go
-source lines: 304
-draft lines: 367
-confidence: high
-status: phase_b_compile
-*/

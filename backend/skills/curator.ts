@@ -1,5 +1,3 @@
-// PORT: backend/skills/curator.go
-
 import fs from "node:fs";
 import path from "node:path";
 import { Effect } from "effect";
@@ -258,11 +256,3 @@ export function CuratorStatusString(cfg: curator_settings): string {
   return b.trimEnd();
 }
 
-/*
-PORT STATUS
-source path: backend/skills/curator.go
-source lines: 281
-draft lines: 254
-confidence: high
-status: phase_b_compile
-*/

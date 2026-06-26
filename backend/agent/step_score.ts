@@ -1,5 +1,3 @@
-// PORT: backend/agent/step_score.go
-
 import path from "node:path";
 import { Effect } from "effect";
 import { type toolResult } from "./agent";
@@ -193,11 +191,3 @@ function toolPathArg(argsJSON: string): [string, boolean] {
   return [args.path, true];
 }
 
-/*
-PORT STATUS
-source path: backend/agent/step_score.go
-source lines: 155
-draft lines: 182
-confidence: high
-status: phase_b_compile
-*/

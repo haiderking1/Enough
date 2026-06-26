@@ -1,8 +1,3 @@
-// PORT STATUS: active
-// source path: runtime/desktop_bridge.ts
-// confidence: high
-// status: phase_b_compile
-
 /**
  * Renderer IPC Layer wraps this; agent never leaves main process.
  */
@@ -696,7 +691,7 @@ export class DesktopBridge {
             yield* apply_provider_model(provider, defaultModelFor(provider), "");
           }).pipe(Effect.mapError(asError));
           yield* runtime.reconnect();
-          // Refresh first so Zen/Go catalogs are loaded before we disable ids.
+          // Refresh first so OpenCode Go/Zen catalogs are loaded before we disable ids.
           yield* refreshDesktopModelRegistry(true);
           yield* disableModelsOnConnect(provider).pipe(Effect.mapError(asError));
           return yield* buildConnectionsResult(runtime, false);

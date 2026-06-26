@@ -1,5 +1,3 @@
-// PORT: backend/agent/browser.go
-
 import { Effect } from "effect";
 import { type tool } from "../opencode/types";
 import { Agent, type toolResult } from "./agent";
@@ -117,11 +115,3 @@ Agent.prototype.toolBrowser = function (
   );
 };
 
-/*
-PORT STATUS
-source path: backend/agent/browser.go
-source lines: 104
-draft lines: 111
-confidence: high
-status: phase_b_compile
-*/

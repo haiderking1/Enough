@@ -1,5 +1,3 @@
-// PORT: backend/agent/parallel_fork.go
-
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
@@ -263,11 +261,3 @@ function repoRootOf(workDir: string): string {
   return root;
 }
 
-/*
-PORT STATUS
-source path: backend/agent/parallel_fork.go
-source lines: 238
-draft lines: 232
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/opencode/client.go
-
 import { Effect } from "effect";
 import { prepare_request_messages } from "./messages";
 import type { chat_request, chat_response, message } from "./types";
@@ -104,13 +102,4 @@ export const new_codex_client = (base_url: string, access_token: string, model: 
   c.codex = true;
   return c;
 };
-
-/*
-PORT STATUS
-source path: backend/opencode/client.go
-source lines: 113
-draft lines: 98
-confidence: high
-status: phase_b_compile
-*/
 

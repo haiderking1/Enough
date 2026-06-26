@@ -1,5 +1,3 @@
-// PORT: backend/web/fetch.go
-
 import { Effect } from "effect";
 import { type page_hit, fetch_error, fetch_failure_kind, max_fetch_cap } from "./types";
 import { is_http_url, validate_fetch_url } from "./url_guard";
@@ -108,10 +106,3 @@ export const normalize_fetch_urls = (raw: string[]): string[] => {
   return out;
 };
 
-/*
-PORT STATUS
-source path: backend/web/fetch.go
-source lines: 74
-confidence: high
-status: phase_b_compile
-*/

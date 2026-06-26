@@ -1,4 +1,3 @@
-// PORT: backend/skills/tool_view.go
 import fs from "node:fs";
 import path from "node:path";
 import { Effect } from "effect";
@@ -751,11 +750,3 @@ export function ExecuteSkillView(
   }
 }
 
-/*
-PORT STATUS
-source path: backend/skills/tool_view.go
-source lines: 634
-draft lines: 580
-confidence: high
-status: phase_b_compile
-*/

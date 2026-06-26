@@ -1,5 +1,3 @@
-// PORT: backend/opencode/runtime_client.go
-
 import type { runtime } from "../config/config";
 import { client, new_client, new_codex_client } from "./client";
 import { provider_codex } from "./providers";
@@ -12,11 +10,3 @@ export const new_client_for_runtime = (cfg: runtime): client => {
   return new_client(cfg.endpoint, cfg.api_key, cfg.model);
 };
 
-/*
-PORT STATUS
-source path: backend/opencode/runtime_client.go
-source lines: 12
-draft lines: 14
-confidence: high
-status: phase_b_compile
-*/

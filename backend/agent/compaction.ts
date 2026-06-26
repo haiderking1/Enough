@@ -611,11 +611,3 @@ export async function NavigateToEntry(
 
 Agent.prototype.NavigateToEntry = NavigateToEntry;
 
-/*
-PORT STATUS
-source path: backend/agent/compaction.go
-source lines: 606
-draft lines: 610
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/web/searxng/common errors
-
 export type searxng_error = {
   readonly _tag: "SearxngError";
   readonly reason: string;

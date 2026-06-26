@@ -1,5 +1,3 @@
-// PORT: backend/session/compaction_utils.go
-
 import type { message, usage } from "../opencode/types";
 import { string_content, content_string, content_blocks } from "../opencode/types";
 import type { compaction_settings } from "../config/config";
@@ -561,10 +559,3 @@ export const get_latest_compaction_entry = (branch: file_entry[]): file_entry | 
   return null;
 };
 
-/*
-PORT STATUS
-source path: backend/session/compaction_utils.go
-source lines: 410
-confidence: high
-status: phase_b_compile
-*/

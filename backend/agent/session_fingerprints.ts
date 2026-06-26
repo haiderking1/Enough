@@ -1,4 +1,3 @@
-// PORT: extracted from backend/agent/guard.go
 // Pure function on the session manager — no Agent import, no side effects.
 
 // sessionFingerprints adapts the session store to the evidence seeder.

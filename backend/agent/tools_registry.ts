@@ -1,5 +1,3 @@
-// PORT: backend/agent/tools_registry.go
-
 import { type tool } from "../opencode/types";
 import { type runtime } from "../config/config";
 import { readFileTool } from "./read_file";
@@ -241,11 +239,3 @@ export function agentSwarmTool(): tool {
   };
 }
 
-/*
-PORT STATUS
-source path: backend/agent/tools_registry.go
-source lines: 177
-draft lines: 219
-confidence: high
-status: phase_b_compile
-*/

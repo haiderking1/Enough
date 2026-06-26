@@ -1,5 +1,3 @@
-// PORT: backend/opencode/content.go
-
 import { blocks_content, string_content, type content_block, type content_image_url, type json_raw_message } from "./types";
 
 // ImagePart represents the mime type and raw bytes of an image to be attached.
@@ -35,15 +33,3 @@ export const tool_content_from_agent = (blocks: tool_content_block[]): json_raw_
   return blocks_content(out);
 };
 
-/*
-PORT STATUS
-source path: backend/opencode/content.go
-source lines: 70
-draft lines: 49
-confidence: high
-status: phase_a_draft
-todos:
-  - none
-notes:
-  - Pure JSON content helpers; no (T, error) returns.
-*/

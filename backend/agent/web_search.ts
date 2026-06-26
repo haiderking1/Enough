@@ -1,5 +1,3 @@
-// PORT: backend/agent/web_search.go
-
 import { Effect } from "effect";
 import { type tool } from "../opencode/types";
 import { Agent, type toolResult } from "./agent";
@@ -87,11 +85,3 @@ Agent.prototype.toolWebSearch = function (
   );
 };
 
-/*
-PORT STATUS
-source path: backend/agent/web_search.go
-source lines: 75
-draft lines: 80
-confidence: high
-status: phase_b_compile
-*/

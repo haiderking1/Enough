@@ -1,5 +1,3 @@
-// PORT: backend/skills/slash.go
-
 import { Effect } from "effect";
 import fs from "node:fs";
 import path from "node:path";
@@ -70,7 +68,7 @@ export function BuildSkillInvocationMessage(
 
   // Preprocess content
   // Since PreprocessSkillContent returns an Effect, we run it synchronously using Effect.runSync
-  // because BuildSkillInvocationMessage has a synchronous signature in Go.
+  // because BuildSkillInvocationMessage has a synchronous signature.
   // Wait! In Wave 1 preprocessing.ts, PreprocessSkillContent returned: Effect.Effect<string, never>.
   // Effect.runSync is safe to run on Effect<string, never> as it has no error type.
   content = Effect.runSync(
@@ -348,11 +346,3 @@ export function BuildPreloadedSkillsPrompt(
   });
 }
 
-/*
-PORT STATUS
-source path: backend/skills/slash.go
-source lines: 276
-draft lines: 341
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/session/fingerprints.go
-
 import fs from "node:fs";
 
 // FileFingerprint records the content hash a path had after the agent's last
@@ -111,11 +109,3 @@ export const sidecar_path = (session_file: string): string => {
   return session_file + ".fingerprints.json";
 };
 
-/*
-PORT STATUS
-source path: backend/session/fingerprints.go
-source lines: 112
-draft lines: 115
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/agent/write_file.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -57,11 +55,3 @@ Agent.prototype.toolWriteFile = function (
   );
 };
 
-/*
-PORT STATUS
-source path: backend/agent/write_file.go
-source lines: 54
-draft lines: 59
-confidence: high
-status: phase_b_compile
-*/

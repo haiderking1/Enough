@@ -1,5 +1,3 @@
-// PORT: backend/agent/obligations/derive.go
-
 import fs from "node:fs";
 import path from "node:path";
 
@@ -33,15 +31,3 @@ export const detect_verify_command = (work_dir: string): string => {
   return "";
 };
 
-/*
-PORT STATUS
-source path: backend/agent/obligations/derive.go
-source lines: 35
-draft lines: 47
-confidence: high
-status: phase_b_compile
-todos:
-  - verify JSON.parse type cast matches Go's json.Unmarshal behavior
-notes:
-  - No (T, error) returns; plain function port.
-*/

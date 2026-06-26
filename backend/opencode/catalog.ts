@@ -1,5 +1,3 @@
-// PORT: backend/opencode/catalog.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -285,11 +283,3 @@ export const get_catalog_models = (provider: string): model_info[] => {
   return Object.values(cat);
 };
 
-/*
-PORT STATUS
-source path: backend/opencode/catalog.go
-source lines: 328
-draft lines: 231
-confidence: high
-status: phase_b_compile
-*/

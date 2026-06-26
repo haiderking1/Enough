@@ -1,5 +1,3 @@
-// PORT: backend/web/types.go
-
 import { Effect } from "effect";
 
 export const ErrEmptyInput = new Error("query cannot be empty");
@@ -82,10 +80,3 @@ export const max_fetch_cap = 5;
 export const max_output_bytes = 96000;
 export const fetch_timeout_sec = 20;
 
-/*
-PORT STATUS
-source path: backend/web/types.go
-source lines: 87
-confidence: high
-status: phase_b_compile
-*/

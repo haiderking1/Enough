@@ -1,4 +1,3 @@
-// PORT: backend/skills/manage_actions.go
 import fs from "node:fs";
 import path from "node:path";
 import { Effect } from "effect";
@@ -901,11 +900,3 @@ export function removeSkillFile(
   );
 }
 
-/*
-PORT STATUS
-source path: backend/skills/manage_actions.go
-source lines: 727
-draft lines: 700
-confidence: high
-status: phase_b_compile
-*/

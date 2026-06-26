@@ -1,5 +1,3 @@
-// PORT: backend/session/types.go
-
 import type { message } from "../opencode/types";
 
 export type entry_type = string;
@@ -121,11 +119,3 @@ export type info = {
   first_message: string;
 };
 
-/*
-PORT STATUS
-source path: backend/session/types.go
-source lines: 121
-draft lines: 121
-confidence: high
-status: phase_b_compile
-*/

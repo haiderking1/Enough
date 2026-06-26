@@ -1,4 +1,3 @@
-// PORT STATUS: active
 // Electron preload — exposes the IPC bridge to the renderer (window.hollowDesktop).
 // Loaded with contextIsolation: true; the renderer never touches Node directly.
 

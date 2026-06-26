@@ -1,5 +1,3 @@
-// PORT: backend/skills/format.go
-
 import { type Skill } from "./types";
 
 function escapeXml(str: string): string {
@@ -41,11 +39,3 @@ export function FormatSkillsForPrompt(skills: Skill[]): string {
   return sb;
 }
 
-/*
-PORT STATUS
-source path: backend/skills/format.go
-source lines: 47
-draft lines: 44
-confidence: high
-status: phase_b_compile
-*/

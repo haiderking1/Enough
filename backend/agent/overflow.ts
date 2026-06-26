@@ -1,4 +1,3 @@
-// PORT: extracted from backend/agent/compaction.go
 // Pure overflow-error detection — no Agent import, no side effects.
 
 export const overflowPatterns = [

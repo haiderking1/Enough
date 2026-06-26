@@ -194,11 +194,3 @@ function extractLastAssistantText(messages: message[]): string {
   return "";
 }
 
-/*
-PORT STATUS
-source path: backend/agent/workflow_worker.go
-source lines: 121
-draft lines: 181
-confidence: high
-status: phase_b_compile
-*/

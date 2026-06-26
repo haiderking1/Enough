@@ -1,5 +1,3 @@
-// PORT: backend/opencode/stream.go
-
 import { Effect } from "effect";
 import { client, client_error, stream_status_error } from "./client";
 import { prepare_request_messages } from "./messages";
@@ -363,11 +361,3 @@ export const chat_stream_once = (
   });
 };
 
-/*
-PORT STATUS
-source path: backend/opencode/stream.go
-source lines: 297
-draft lines: 279
-confidence: high
-status: phase_b_compile
-*/

@@ -1,4 +1,3 @@
-// PORT: backend/skills/prompt_index.go
 import fs from "node:fs";
 import path from "node:path";
 import { Effect } from "effect";
@@ -508,11 +507,3 @@ function shouldDemoteCategory(cat: string, isCoding: boolean, configMode: string
   return !!NonCodingCategories[parts[0]];
 }
 
-/*
-PORT STATUS
-source path: backend/skills/prompt_index.go
-source lines: 508
-draft lines: 470
-confidence: high
-status: phase_b_compile
-*/

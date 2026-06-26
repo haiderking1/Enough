@@ -1,6 +1,5 @@
-// PORT STATUS: active
 // Real Electron IPC layer (replaces electron_stub.ts).
-// Renderer talks IPC only — NO WebSocket, NO Go binary spawn.
+// Renderer talks IPC only — no WebSocket.
 
 import { Effect, Stream } from "effect";
 import { DesktopBridge, type DesktopResponse } from "../desktop_bridge";

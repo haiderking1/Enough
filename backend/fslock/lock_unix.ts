@@ -1,5 +1,3 @@
-// PORT: backend/fslock/lock_unix.go
-// backend/fslock/lock_unix.go
 // Exclusive file-lock helpers for Unix via flock(2).
 
 import { Effect } from "effect";
@@ -50,19 +48,3 @@ export const unlock = (
     catch: (cause) => fs_lock_error("unlock", cause),
   });
 
-/*
-PORT STATUS
-source path: backend/fslock/lock_unix.go
-source lines: 18
-draft lines: 67
-confidence: medium
-status: phase_a_draft
-todos:
-  - bind to actual Unix flock syscall via Bun FFI / native addon
-  - model file descriptor closer to Node/Bun file handle
-  - decide whether fs_lock_error should carry errno codes
-notes:
-  - Translates (error) return pattern into Effect.Effect<void, fs_lock_error>.
-  - Platform-specific Windows variant (lock_windows.go) is listed separately in
-    the manifest and should be ported next to this package.
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/workflow/sdk.go
-
 import { Effect } from "effect";
 import { type AgentOptions, type AgentResult } from "./types";
 import { Runtime } from "./runtime";
@@ -95,11 +93,3 @@ proto.currentPhase = currentPhase;
 proto.acquireDirect = acquireDirect;
 proto.releaseDirect = releaseDirect;
 
-/*
-PORT STATUS
-source path: backend/workflow/sdk.go
-source lines: 146
-draft lines: 98
-confidence: high
-status: phase_b_compile
-*/

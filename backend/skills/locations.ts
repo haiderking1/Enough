@@ -1,5 +1,3 @@
-// PORT: backend/skills/locations.go
-
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -199,11 +197,3 @@ function getExternalSkillsDirs(cfg: runtime): string[] {
   return out;
 }
 
-/*
-PORT STATUS
-source path: backend/skills/locations.go
-source lines: 187
-draft lines: 185
-confidence: high
-status: phase_b_compile
-*/

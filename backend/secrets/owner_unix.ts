@@ -1,5 +1,3 @@
-// PORT: backend/secrets/owner_unix.go
-// backend/secrets/owner_unix.go
 //go:build unix placeholder
 
 import fs from "node:fs";
@@ -20,15 +18,3 @@ export const verify_owner = (path: string): Effect.Effect<void, secrets_error_ty
     }
   });
 
-/*
-PORT STATUS
-source path: backend/secrets/owner_unix.go
-source lines: 26
-draft lines: 33
-confidence: high
-status: phase_a_draft
-todos:
-  - verify process.getuid() is available and matches Go os.Getuid on target runtime
-notes:
-  - Uses Node fs.Stats.uid directly instead of Go's syscall.Stat_t cast.
-*/

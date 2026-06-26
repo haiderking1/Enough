@@ -1,5 +1,3 @@
-// PORT: backend/opencode/types.go
-
 export type json_raw_message = Uint8Array;
 
 export type stream_options = { include_usage: boolean };
@@ -65,7 +63,7 @@ export const message_content_json = (m: message): unknown => {
   }
 };
 
-/** Wire-format message for /chat/completions — embeds content JSON like Go json.RawMessage. */
+/** Wire-format message for /chat/completions — content is opaque JSON on the wire. */
 export const message_for_api = (m: message): Record<string, unknown> => {
   const out: Record<string, unknown> = {
     role: m.role,
@@ -197,15 +195,3 @@ export const content_blocks = (m: message): content_block[] | null => {
   }
 };
 
-/*
-PORT STATUS
-source path: backend/opencode/types.go
-source lines: 160
-draft lines: 88
-confidence: high
-status: phase_a_draft
-todos:
-  - wire ThinkingParams when its Go file is ported
-notes:
-  - json.RawMessage mapped to Uint8Array with JSON encode/decode helpers.
-*/

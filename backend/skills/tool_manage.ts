@@ -1,5 +1,3 @@
-// PORT: backend/skills/tool_manage.go
-
 import { Effect } from "effect";
 import { type runtime } from "../config/config";
 import { type SkillManageResult } from "./types";
@@ -176,7 +174,7 @@ export function ApplySkillPending(
     try: () => {
       const payloadString = JSON.stringify(payload);
       opts.BypassGate = true;
-      // We run ExecuteSkillManage using Effect.runSync because ApplySkillPending in Go
+      // We run ExecuteSkillManage using Effect.runSync because ApplySkillPending
       // calls ExecuteSkillManage synchronously.
       // Since ExecuteSkillManage returns Effect.Effect<[string, boolean], never>, it is safe.
       const [resJSON, isErr] = Effect.runSync(ExecuteSkillManage(payloadString, opts));
@@ -190,11 +188,3 @@ export function ApplySkillPending(
   });
 }
 
-/*
-PORT STATUS
-source path: backend/skills/tool_manage.go
-source lines: 156
-draft lines: 181
-confidence: high
-status: phase_b_compile
-*/

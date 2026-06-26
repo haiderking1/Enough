@@ -1,7 +1,4 @@
-// PORT: backend/core/events.go
-// backend/core/events.go
-// Effect wiring is not needed in this file because events.go contains only
-// data shapes and string constants; no function returns (T, error).
+// Event kind constants and payload shapes for the agent pub/sub bus.
 
 export type event = {
   kind: string;
@@ -143,18 +140,3 @@ export type workflow_agent_event = {
   turns: number;
 };
 
-/*
-PORT STATUS
-source path: backend/core/events.go
-source lines: 147
-draft lines: 159
-confidence: high
-status: phase_a_draft
-todos:
-  - decide whether json.RawMessage maps to Uint8Array or string
-  - decide whether unknown should be branded as session types later
-  - confirm snake_case export naming matches project convention
-notes:
-  - No functions with (T, error) signatures, so Effect types were not needed.
-  - Pure data port; types and constants aligned with Go exports.
-*/

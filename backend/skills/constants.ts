@@ -1,5 +1,3 @@
-// PORT: backend/skills/constants.go
-
 export const MaxSkillNameLength = 64;
 export const MaxSkillDescriptionLength = 1024;
 export const PromptIndexDescriptionMax = 60;
@@ -54,11 +52,3 @@ export const AllowedSkillSubdirs: Record<string, boolean> = {
 export const SkillManageNameRe = /^[a-z0-9][a-z0-9._-]*$/;
 export const SkillNameValidRe = /^[a-z0-9-]+$/;
 
-/*
-PORT STATUS
-source path: backend/skills/constants.go
-source lines: 60
-draft lines: 55
-confidence: high
-status: phase_b_compile
-*/

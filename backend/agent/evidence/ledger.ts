@@ -1,6 +1,3 @@
-// PORT: backend/agent/evidence/ledger.go
-// backend/agent/evidence/ledger.go
-
 import { Effect } from "effect";
 
 export type kind = string;
@@ -197,18 +194,3 @@ export const hash_bytes = (data: Uint8Array): string => {
   return hex;
 };
 
-/*
-PORT STATUS
-source path: backend/agent/evidence/ledger.go
-source lines: 181
-draft lines: 212
-confidence: medium
-status: phase_a_draft
-todos:
-  - replace SHA-256 stub with real crypto.subtle / Node crypto implementation
-  - evaluate whether mutex stub is sufficient for concurrent effect runs
-  - consider schema decoding for payload JSON instead of cast+parse
-notes:
-  - Ledger methods that return (T, error) in Go are wrapped in Effect.Effect.
-  - json.RawMessage mapped to Uint8Array; time.Time mapped to Date.
-*/

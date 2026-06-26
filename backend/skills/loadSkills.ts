@@ -1,5 +1,3 @@
-// PORT: backend/skills/loadSkills.go
-
 import path from "node:path";
 import { type runtime } from "../config/config";
 import { type Skill } from "./types";
@@ -68,11 +66,3 @@ export function LoadSkills(opts: LoadSkillsOptions): LoadSkillsResult {
   };
 }
 
-/*
-PORT STATUS
-source path: backend/skills/loadSkills.go
-source lines: 62
-draft lines: 72
-confidence: high
-status: phase_b_compile
-*/

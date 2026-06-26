@@ -1,5 +1,3 @@
-// PORT: backend/agent/models.go
-
 import { provider_opencode } from "../opencode/providers";
 import { resolve_context_window } from "../opencode/context";
 
@@ -33,11 +31,3 @@ export function ModelContextWindow(provider: string, model: string, configOverri
   return 128000;
 }
 
-/*
-PORT STATUS
-source path: backend/agent/models.go
-source lines: 37
-draft lines: 33
-confidence: high
-status: phase_b_compile
-*/

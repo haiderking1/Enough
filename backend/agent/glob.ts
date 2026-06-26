@@ -1,5 +1,3 @@
-// PORT: backend/agent/glob.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import * as fsSync from "node:fs";
@@ -182,11 +180,3 @@ async function walk(
   }
 }
 
-/*
-PORT STATUS
-source path: backend/agent/glob.go
-source lines: 146
-draft lines: 181
-confidence: high
-status: phase_b_compile
-*/

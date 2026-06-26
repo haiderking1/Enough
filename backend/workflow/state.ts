@@ -1,5 +1,3 @@
-// PORT: backend/workflow/state.go
-
 import fs from "node:fs";
 import path from "node:path";
 import { type Meta, type Snapshot, type AgentSnapshot, type AgentResult, cloneJSON } from "./types";
@@ -238,11 +236,3 @@ export function SetAlwaysApproved(workDir: string, name: string): void {
   fs.writeFileSync(filePath, data, { mode: 0o600 });
 }
 
-/*
-PORT STATUS
-source path: backend/workflow/state.go
-source lines: 231
-draft lines: 219
-confidence: high
-status: phase_b_compile
-*/

@@ -1,5 +1,3 @@
-// PORT: backend/workflow/spawn.go
-
 import { type AgentOptions, type AgentResult, type AgentSnapshot } from "./types";
 import { Runtime } from "./runtime";
 import { parseAndValidateJSON } from "./schema";
@@ -305,11 +303,3 @@ proto.startAgent = startAgent;
 proto.finishAgent = finishAgent;
 proto.handleWorkerEvent = handleWorkerEvent;
 
-/*
-PORT STATUS
-source path: backend/workflow/spawn.go
-source lines: 178
-draft lines: 275
-confidence: high
-status: phase_b_compile
-*/

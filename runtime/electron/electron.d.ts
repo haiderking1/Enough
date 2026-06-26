@@ -1,4 +1,3 @@
-// PORT STATUS: active
 // Minimal Electron module declaration so hollow typechecks without a hard
 // electron install. runtime/electron/main.ts imports { app, BrowserWindow, ipcMain }
 // and preload.cjs is CommonJS (excluded from tsconfig). When electron is actually

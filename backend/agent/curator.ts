@@ -370,11 +370,3 @@ export function writeCuratorReport(start: Date, summary: string): string {
   }
 }
 
-/*
-PORT STATUS
-source path: backend/agent/curator.go
-source lines: 370
-draft lines: 250
-confidence: high
-status: phase_b_compile
-*/

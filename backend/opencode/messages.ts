@@ -1,5 +1,3 @@
-// PORT: backend/opencode/messages.go
-
 import { blocks_content, content_blocks, string_content, type content_block, type message, type tool_call } from "./types";
 import { normalize_messages, is_minimax_model } from "./thinking";
 import { supports_images } from "./models";
@@ -124,11 +122,3 @@ export const repair_tool_messages = (msgs: message[]): message[] => {
 
 export { normalize_messages };
 
-/*
-PORT STATUS
-source path: backend/opencode/messages.go
-source lines: 181
-draft lines: 116
-confidence: high
-status: phase_b_compile
-*/

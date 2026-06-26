@@ -1,12 +1,7 @@
-// PORT STATUS: active
-// source path: runtime/schemas.ts
-// confidence: high
-// status: phase_b_compile
-
 import * as Schema from "@effect/schema/Schema";
 
 // ==========================================
-// Command Schemas (mirroring serve.go types)
+// Command Schemas
 // ==========================================
 
 export const ListSessions = Schema.Struct({

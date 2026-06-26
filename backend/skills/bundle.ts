@@ -1,5 +1,3 @@
-// PORT: backend/skills/bundle.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
@@ -53,11 +51,3 @@ export function ExtractHollowSkillIfMissing(): Effect.Effect<void, Error> {
   });
 }
 
-/*
-PORT STATUS
-source path: backend/skills/bundle.go
-source lines: 29
-draft lines: 57
-confidence: high
-status: phase_b_compile
-*/

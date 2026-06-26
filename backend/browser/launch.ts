@@ -1,5 +1,3 @@
-// PORT: backend/browser/launch.go
-
 import { Effect } from "effect";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
@@ -288,11 +286,3 @@ export function ensure_browser_launched(baseUrl: string): Effect.Effect<boolean,
   });
 }
 
-/*
-PORT STATUS
-source path: backend/browser/launch.go
-source lines: 256
-draft lines: 247
-confidence: high
-status: phase_b_compile
-*/

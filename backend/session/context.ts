@@ -1,5 +1,3 @@
-// PORT: backend/session/context.go
-
 import {
   type_session,
   type_message,
@@ -223,11 +221,3 @@ export const get_branch = (entries: file_entry[], leaf_id?: string | null): file
   return path_list;
 };
 
-/*
-PORT STATUS
-source path: backend/session/context.go
-source lines: 206
-draft lines: 213
-confidence: high
-status: phase_b_compile
-*/

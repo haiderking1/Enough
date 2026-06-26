@@ -1,5 +1,3 @@
-// PORT: backend/config/mcp_manage.go
-
 import { config_error, type config_error as config_error_type } from "./error";
 import type { config, mcp_server_config } from "./config";
 import { Effect } from "effect";
@@ -86,15 +84,3 @@ export const remove_mcp_server = (
     }
   });
 
-/*
-PORT STATUS
-source path: backend/config/mcp_manage.go
-source lines: 73
-draft lines: 100
-confidence: high
-status: phase_a_draft
-todos:
-  - none beyond verifying error strings match Go exactly
-notes:
-  - Functions returning (error) are modeled as Effect.Effect<void, config_error>.
-*/

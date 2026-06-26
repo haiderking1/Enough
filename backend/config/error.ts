@@ -1,5 +1,3 @@
-// PORT: backend/config/common errors
-
 export type config_error = {
   readonly _tag: "ConfigError";
   readonly reason: string;

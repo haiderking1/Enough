@@ -1,5 +1,3 @@
-// PORT: backend/workflow/runtime.go
-
 import { Effect } from "effect";
 import vm from "node:vm";
 import fs from "node:fs";
@@ -191,7 +189,7 @@ export class Runtime {
         failed: s.failed,
         tokens: s.tokens,
         started_at: s.startedAt,
-        elapsed: elapsedMs * 1000000, // Y in nanoseconds to match Go
+        elapsed: elapsedMs * 1_000_000, // nanoseconds
         message: message,
       } as workflow_run_event,
     });
@@ -657,11 +655,3 @@ export function parseArgs(raw: string): any {
   return trimmed;
 }
 
-/*
-PORT STATUS
-source path: backend/workflow/runtime.go
-source lines: 607
-draft lines: 504
-confidence: high
-status: phase_b_compile
-*/

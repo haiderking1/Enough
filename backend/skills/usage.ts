@@ -1,5 +1,3 @@
-// PORT: backend/skills/usage.go
-
 import { Effect } from "effect";
 import fs from "node:fs";
 import path from "node:path";
@@ -418,11 +416,3 @@ export function RestoreSkill(name: string): Effect.Effect<[boolean, string], Err
   });
 }
 
-/*
-PORT STATUS
-source path: backend/skills/usage.go
-source lines: 411
-draft lines: 409
-confidence: high
-status: phase_b_compile
-*/

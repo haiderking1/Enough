@@ -1,5 +1,3 @@
-// PORT: backend/imageutil/mime.go
-
 const png_signature = new Uint8Array([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
 ]);
@@ -83,16 +81,3 @@ export const is_animated_png = (data: Uint8Array): boolean => {
   return false;
 };
 
-/*
-PORT STATUS
-source path: backend/imageutil/mime.go
-source lines: 58
-draft lines: 98
-confidence: high
-status: phase_a_draft
-todos:
-  - decide if latin1 TextDecoder is acceptable for magic-string comparisons
-  - verify DataView slicing does not break on subarray/offset edge cases
-notes:
-  - No (T, error) returns; plain function port.
-*/

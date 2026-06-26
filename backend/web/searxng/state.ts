@@ -1,5 +1,3 @@
-// PORT: backend/web/searxng/state.go
-
 import path from "node:path";
 import fs from "node:fs";
 import { Effect } from "effect";
@@ -37,16 +35,3 @@ export const read_state = (data_dir: string): [number, number, boolean] => {
   }
 };
 
-/*
-PORT STATUS
-source path: backend/web/searxng/state.go
-source lines: 36
-draft lines: 52
-confidence: high
-status: phase_a_draft
-todos:
-  - none; logic is a direct port aside from using sync file helpers
-notes:
-  - write_state returns (error) in Go, modeled as Effect.Effect<void, searxng_error>.
-  - read_state has no error return and remains a plain tuple function.
-*/

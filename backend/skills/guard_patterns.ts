@@ -1,5 +1,3 @@
-// PORT: backend/skills/guard_patterns.go
-
 export interface ThreatPattern {
   Regex: RegExp;
   PatternID: string;
@@ -858,11 +856,3 @@ export const SkillGuardThreatPatterns: ThreatPattern[] = [
   }
 ];
 
-/*
-PORT STATUS
-source path: backend/skills/guard_patterns.go
-source lines: 931
-draft lines: 983
-confidence: high
-status: phase_b_compile
-*/

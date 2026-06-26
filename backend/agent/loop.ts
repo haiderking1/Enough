@@ -140,11 +140,3 @@ function loopRuntimeNotice(lockedPrompt: string, iteration: number, goalLock: bo
   return out;
 }
 
-/*
-PORT STATUS
-source path: backend/agent/loop.go
-source lines: 119
-draft lines: 147
-confidence: high
-status: phase_b_compile
-*/

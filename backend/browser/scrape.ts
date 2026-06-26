@@ -1,5 +1,3 @@
-// PORT: backend/browser/scrape.go
-
 import { Effect } from "effect";
 
 export const MaxElementList = 50;
@@ -107,11 +105,3 @@ export function buildScrapeExpression(
   return Effect.succeed(expr);
 }
 
-/*
-PORT STATUS
-source path: backend/browser/scrape.go
-source lines: 96
-draft lines: 119
-confidence: high
-status: phase_b_compile
-*/

@@ -1,12 +1,10 @@
-// PORT: backend/memory/scan.go
-
 import { SkillGuardThreatPatterns } from "../skills/guard_patterns";
 import { InvisibleChars } from "../skills/guard";
 
 // Threat scanning for content that gets injected into the system prompt
 // (SOUL.md, AGENTS.md context files, MEMORY.md / USER.md entries).
 //
-// Patterns are shared with the skill guard (backend/skills/guard_patterns.go)
+// Patterns are shared with the skill guard (backend/skills/guard_patterns.ts)
 // — the single source of truth. Two scopes, mirroring Hermes:
 //
 //   - "strict" (memory entries): critical + high severity across ALL
@@ -93,11 +91,3 @@ export function ContextThreatIDs(content: string): string[] {
   return threatPatternIDs(content, ScanScope.ScopeContext);
 }
 
-/*
-PORT STATUS
-source path: backend/memory/scan.go
-source lines: 103
-draft lines: 98
-confidence: high
-status: phase_b_compile
-*/

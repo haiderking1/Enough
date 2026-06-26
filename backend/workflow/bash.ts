@@ -1,5 +1,3 @@
-// PORT: backend/workflow/bash.go
-
 import { Effect } from "effect";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -125,11 +123,3 @@ export function runBash(
 
 (Runtime.prototype as any).runBash = runBash;
 
-/*
-PORT STATUS
-source path: backend/workflow/bash.go
-source lines: 61
-draft lines: 111
-confidence: high
-status: phase_b_compile
-*/

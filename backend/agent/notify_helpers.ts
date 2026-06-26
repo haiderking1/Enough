@@ -1,5 +1,3 @@
-// PORT: backend/agent/notify_helpers.go
-
 import { subsystem_skills, subsystem_memory } from "../approval/write_approval";
 import { Agent } from "./agent";
 
@@ -135,11 +133,3 @@ export function notifyDirectMemoryWrite(this: Agent, argsJSON: string, toolOutpu
 
 Agent.prototype.notifyDirectMemoryWrite = notifyDirectMemoryWrite;
 
-/*
-PORT STATUS
-source path: backend/agent/notify_helpers.go
-source lines: 131
-draft lines: 122
-confidence: high
-status: phase_b_compile
-*/

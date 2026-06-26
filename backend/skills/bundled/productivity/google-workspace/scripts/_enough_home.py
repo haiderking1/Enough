@@ -2,7 +2,7 @@
 
 Skill scripts may run outside the Hollow process (system Python, CI) where
 no in-process helper exists. This module mirrors the Hollow home layout
-without importing the Go binary.
+without a separate agent binary.
 
 Legacy: ``get_hermes_home`` / ``HOLLOW_HOME`` still work as aliases.
 """

@@ -1,5 +1,3 @@
-// PORT: backend/agent/tool_path.go
-
 import { Effect } from "effect";
 import path from "node:path";
 import { Agent } from "./agent";
@@ -24,11 +22,3 @@ Agent.prototype.resolvePath = function (this: Agent, p: string): Effect.Effect<s
   });
 };
 
-/*
-PORT STATUS
-source path: backend/agent/tool_path.go
-source lines: 31
-draft lines: 31
-confidence: high
-status: phase_b_compile
-*/

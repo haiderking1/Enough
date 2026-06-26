@@ -1,6 +1,3 @@
-// PORT: backend/agent/evidence/continuity.go
-// backend/agent/evidence/continuity.go
-
 import {
   ledger,
   hash_bytes,
@@ -67,7 +64,7 @@ export const seed_continuity_reads = (ledger: ledger | null, fps: fingerprint[])
       Effect.runSync(Effect.ignore(append_effect));
       n++;
     } catch {
-      // ignore append failures, matching Go's err == nil guard
+      // ignore append failures
     }
   }
 
@@ -79,11 +76,3 @@ const read_file_sync = (p: string): Uint8Array => {
   return fs.readFileSync(p);
 };
 
-/*
-PORT STATUS
-source path: backend/agent/evidence/continuity.go
-source lines: 50
-draft lines: 95
-confidence: high
-status: phase_b_compile
-*/

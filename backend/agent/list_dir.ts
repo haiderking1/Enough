@@ -1,5 +1,3 @@
-// PORT: backend/agent/list_dir.go
-
 import { Effect } from "effect";
 import fs from "node:fs/promises";
 import { type tool } from "../opencode/types";
@@ -63,11 +61,3 @@ Agent.prototype.toolListDir = function (
   );
 };
 
-/*
-PORT STATUS
-source path: backend/agent/list_dir.go
-source lines: 62
-draft lines: 62
-confidence: high
-status: phase_b_compile
-*/

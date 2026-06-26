@@ -1,5 +1,3 @@
-// PORT: backend/workflow/pipeline.go
-
 import { Effect } from "effect";
 import { type PipelineResult, type StageResult, type AgentResult, type AgentOptions, cloneJSON } from "./types";
 import { Runtime } from "./runtime";
@@ -151,11 +149,3 @@ proto.runPipeline = runPipeline;
 proto.phaseName = phaseName;
 proto.setPhase = setPhase;
 
-/*
-PORT STATUS
-source path: backend/workflow/pipeline.go
-source lines: 117
-source lines: 111
-confidence: high
-status: phase_b_compile
-*/

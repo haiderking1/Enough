@@ -1,5 +1,3 @@
-// PORT: backend/memory/store.go
-
 import { Effect } from "effect";
 import fs from "node:fs";
 import path from "node:path";
@@ -542,11 +540,3 @@ export function matchSingle(entries: string[], needle: string): [number, Result 
   return [idxs[0], null];
 }
 
-/*
-PORT STATUS
-source path: backend/memory/store.go
-source lines: 592
-draft lines: 521
-confidence: high
-status: phase_b_compile
-*/

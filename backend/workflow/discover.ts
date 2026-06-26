@@ -1,5 +1,3 @@
-// PORT: backend/workflow/discover.go
-
 import { Effect } from "effect";
 import fs from "node:fs";
 import path from "node:path";
@@ -76,11 +74,3 @@ export function ResolveScriptPath(workDir: string, arg: string): Effect.Effect<s
   });
 }
 
-/*
-PORT STATUS
-source path: backend/workflow/discover.go
-source lines: 67
-draft lines: 83
-confidence: high
-status: phase_b_compile
-*/

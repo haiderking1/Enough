@@ -1,4 +1,3 @@
-// PORT STATUS: active
 // Maps core agent events + DesktopBridge responses → renderer BackendMessage shapes.
 //
 // Renderer (hollowClient.ts handleBackendMessage) expects these message types:
@@ -216,7 +215,7 @@ export const mapDispatchResponse = (
       return { type: "ready" };
 
     case "prompt.success":
-      // Go serve.go always sends "done" after Prompt returns; mirror that for IPC.
+      // Always send "done" after Prompt returns.
       return { type: "done" };
 
     default:

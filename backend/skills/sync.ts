@@ -1,4 +1,3 @@
-// PORT: backend/skills/sync.go
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -490,11 +489,3 @@ export function ResetBundledSkill(
   });
 }
 
-/*
-PORT STATUS
-source path: backend/skills/sync.go
-source lines: 430
-draft lines: 400
-confidence: high
-status: phase_b_compile
-*/
